@@ -1,0 +1,181 @@
+\documentclass{jsarticle}
+\usepackage[dvipdfmx]{graphicx}
+
+
+\title{ソフトウェア設計及び実験\\後期・グループ開発企画書 \\10班
+	\huge{}
+}
+
+\author{学生番号　氏名}
+\date{日付}
+
+\begin{document}
+\maketitle
+
+\section{ゲーム内容}
+
+\subsection{タイトル}
+（記述例）むしよけーる　-飛脚を極めろ！-
+
+\subsection{ジャンル}
+（記述例）横スクロール型アクションゲーム
+
+\subsection{コンセプト・概要}
+（記述例）無数の迫りくる敵（昆虫）に当たらずに，とにかく早くゴールをめざすハラハラドキドキのタイムバトル
+\begin{itemize}
+\item 強制横スクロール（毎秒10ピクセルでステージ（背景）をｘ軸マイナス方向に動かす）
+\item プレイヤ（飛脚）は横移動とジャンプのみできる
+\item 動きが異なる敵キャラは四方八方から出現してくる
+\item 5分以内にゴールにたどり着けなければならない
+\item 5ステージある（街中昼間，山間部，沿岸部，街中夜間，街中雨）
+\item アイテムをとるとさまざまな効果を発揮できる
+\end{itemize}
+
+\subsection{世界観}
+（記述例）江戸時代の日本．昆虫憐れみの令が発せられ，人々は昆虫（蚊など）を殺せなくなっただけでなく触れるだけでも罰せられるようになってしまった．飛脚である主人公の徳大夫（とくだゆう）は，今日も文を時間内に届なくてはならない．昆虫に触れないようにして．
+
+\subsection{ルール}
+（記述例）クリア条件
+\begin{itemize}
+\item 5分以内にゴールにたどり着く
+\end{itemize}
+（記述例）終了条件
+\begin{itemize}
+\item 敵に3回当たったとき
+\item 穴に落ちたとき
+\item 5分以内にゴールにたどり着けなかったとき
+\end{itemize}
+
+\subsection{UI}
+\subsubsection{画面構成}
+（記述例）640*480ピクセルのウィンドウは，プレイ部と情報提示部から構成される（図\ref{fig:ui}）．プレイ部にステージ，プレイヤキャラクタ，敵キャラクタが表示される．情報提示部には，HP，残り時間とゴールまでの距離が表示される．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[height=10cm]{ui.pdf}
+\caption{画面構成}
+\label{fig:ui}
+\end{center}
+\end{figure}
+
+\subsubsection{操作方法}
+（記述例）ゲームパッドを用いる．
+\begin{itemize}
+\item \bf{Aボタン：} ジャンプ
+\item \bf{Bボタン：} ポーズ
+\item \bf{右ボタン：} 右（+ｘ)方向へ移動
+\item \bf{左ボタン：} 左（-ｘ)方向へ移動
+\end{itemize}
+
+\section{実装方法}
+実装にはSDLを用いる，SDLについては，授業資料\cite{mitsuhara}を参考にする．
+
+\subsection{利用デバイス}
+（記述例）ゲームパッドを用いる（図\ref{fig:gp}）．SDL\_GameControllerまたはSDL\_Joystickを用いてゲームパッド処理を実装する．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=230pt]{gamepad.png}
+\caption{ゲームパッド（使用するボタン）}
+\label{fig:gp}
+\end{center}
+\end{figure}
+
+\subsection{データ構造}
+（記述例）現時点で必要だと考えられる変数，構造体を示す（表\ref{table1-1}）（表\ref{table1-2}）．
+
+\begin{table}[tb]
+\begin{center}
+\caption{データ構造（共通）}
+\label{table1-1}
+\begin{tabular}{|c||c|l|}\hline
+\multicolumn{3}{|l|}{共通の構造}\\ \hline
+データ型 & 変数名 &  \\ \hline \hline
+int & type & オブジェクトの型（キャラ，アイテム，エフェクト，etc...） \\ \hline
+unsigned short & id & オブジェクトの番号 \\ \hline
+SDL\_Point & pos & オブジェクトの座標 \\ \hline
+int & depth & 深さ（0 or 1） \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[tb]
+\begin{center}
+\caption{データ構造（キャラ固有）}
+\label{table1-2}
+\begin{tabular}{|c||c|c|}\hline
+\multicolumn{3}{|l|}{キャラ固有の構造}\\ \hline
+データ型 & 変数名 &  \\ \hline \hline
+unsigned short & hp & キャラの耐久度 \\ \hline
+int & distance & ゴールまでの距離 \\ \hline
+char* & name & キャラ名 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\subsection{モジュール}
+（記述例）現時点で必要だと考えられる関数をモジュールごとに示す（表\ref{table2-1}）．
+
+\noindent
+(1)　ユーザインタフェイス（gui\_process.c)
+\par
+
+\begin{table}[tb]
+\begin{center}
+\caption{ユーザインタフェイス関係関数}
+\label{table2-1}
+\begin{tabular}{|c||l|}\hline
+\multicolumn{2}{|l|}{\bf{void InitWindows(void)}}\\ \hline
+関数名 & InitWindows()  \\ \hline \hline
+機能 & ウィンドウの初期化処理を行う関数 \\
+引数 & なし \\
+返り値 & なし \\ \hline
+\multicolumn{2}{|l|}{\bf{Bool WindowEvent(void)}}\\ \hline
+関数名 & WindowEvent()  \\ \hline \hline
+機能 & イベントを取得し，処理する関数 \\
+引数 & なし \\
+返り値 & 終了フラグ（True：処理継続，False：終了） \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\section{ガントチャート}
+（記述例）1週間ごとのスケジュールを図\ref{fig:gc}に示す．開発に遅れが生じた場合，即座に遅れを取り戻すよう，夜間・休日などは自宅でも開発する．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[scale=0.80]{ganttchart.png}
+\caption{開発スケジュールガントチャート}
+\label{fig:gc}
+\end{center}
+\end{figure}
+
+\section{自己評価と理由}
+（記述例）表\ref{table3}に示すように，独創性のみ1で，合計値は5となっており，合格基準を満たしていると考える． 
+
+\begin{table}[tb]
+\begin{center}
+\caption{自己評価と理由}
+\label{table3}
+\begin{tabular}{|c|c|l|}\hline
+項目 & 評価値 & 理由 \\ \hline\hline
+ハードウェア構成 & 2 & ゲームパッドを使っているから \\ \hline
+技術面 & 2 & 横スクロールアクションゲームで，多数の敵との当たり判定に工夫が必要だから \\ \hline
+独創性 & 1 & 見た目がスーパーマリオに似ているから \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\section{参考にしたゲーム}
+（記述例）スーパーマリオブラザーズを参考にした．強制スクロール式にして，とにかく敵が次々出現する．ある種の「避けゲー」になっている点が異なる．
+
+\section{ゲームのアピールポイント}
+（記述例）やりこむとほど，うまく敵をよけられるようになりステージクリアとなる中毒性の高いゲーム．5ステージはそれぞれ異なる雰囲気の画像で彩る．
+
+\begin{thebibliography}{9}
+\bibitem{mitsuhara} 光原弘幸: ゲーム開発のためのSDL プログラミング-ユーザインタフェイスを中心として,  ソフト実験授業資料 (2019).
+\end{thebibliography}
+
+\end{document}
+

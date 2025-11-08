@@ -41,7 +41,7 @@ Joy-Con(R)を横持ちで操作し自分のプレイヤーを動かして、ス�
 
 \subsection{UI}
 \subsubsection{画面構成}
-（記述例）640*480ピクセルのウィンドウは，プレイ部と情報提示部から構成される（図\ref{fig:ui}）．プレイ部にステージ，プレイヤキャラクタ，敵キャラクタが表示される．情報提示部には，HP，残り時間とゴールまでの距離が表示される．
+プレイ部にステージ，プレイヤキャラクタ，敵キャラクタが表示される．情報提示部には，HP，残り時間とゴールまでの距離が表示される．
 
 \begin{figure}[t]
 \begin{center}
@@ -56,15 +56,14 @@ Joy-Conの右側を用いる．
 \begin{itemize}
 \item \bf{Xボタン：} 発射ボタン
 \item \bf{スティック：} 照準を合わせる
-\item \bf{右ボタン：} 右（+ｘ)方向へ移動
-\item \bf{左ボタン：} 左（-ｘ)方向へ移動
+\item \bf{ジャイロ：} 前 (-x)方向へ移動,左(-y)方向へ移動
 \end{itemize}
 
 \section{実装方法}
-実装にはSDLを用いる，SDLについては，授業資料\cite{mitsuhara}を参考にする．
+実装にはSDLを用いる
 
 \subsection{利用デバイス}
-（記述例）ゲームパッドを用いる（図\ref{fig:gp}）．SDL\_GameControllerまたはSDL\_Joystickを用いてゲームパッド処理を実装する．
+Joy-Conの右側を用いる,SDL\_GameControllerまたはSDL\_Joystickを用いてゲームパッド処理を実装する．
 
 \begin{figure}[t]
 \begin{center}
@@ -191,6 +190,7 @@ char* & name & キャラ名 \\ \hline
 \end{thebibliography}
 
 \end{document}
+
 
 
 

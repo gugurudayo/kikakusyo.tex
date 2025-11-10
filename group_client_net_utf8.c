@@ -3,7 +3,7 @@
 機能		: クライアントのネットワーク処理
 *****************************************************************/
 
-#include"group_common_utf8.h"
+#include"group_common_utf8.h"　
 #include"group_client_func_utf8.h"
 #include<sys/socket.h>
 #include<netdb.h>
@@ -43,7 +43,7 @@ int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAM
 
     bzero((char*)&server,sizeof(server));
     server.sin_family = AF_INET;
-    server.sin_port = htons(PORT);
+    server.sin_port = htons(PORT); //PORTはgroup_common_utf8.h参照
     bcopy(servHost->h_addr,(char*)&server.sin_addr,servHost->h_length);
 
     /* ソケットを作成する */
@@ -67,7 +67,7 @@ int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAM
 		len = strlen(str)-1;
 		str[len]='\0';
     }while(len>MAX_NAME_SIZE-1 || len==0);
-    SendData(str,MAX_NAME_SIZE);
+    SendData(str,MAX_NAME_SIZE);	//SendDataはgroup_client_func_utf8.h参照
 
     printf("Please Wait\n");
 
@@ -75,10 +75,10 @@ int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAM
     GetAllName(clientID,num,clientNames);
 
      
-    SetMyClientID(*clientID);
+    SetMyClientID(*clientID);	//group_client_func_utf8.h参照
 
     /* select()のためのマスク値を設定する */
-    SetMask();
+    SetMask(); //group_client_net_utf8.c参照
     
     return 0;
 }
@@ -110,7 +110,7 @@ int SendRecvManager(void)
     	/* コマンドを読み込む */
 		RecvData(&command,sizeof(char));
     	/* コマンドに対する処理を行う */
-		endFlag = ExecuteCommand(command);
+		endFlag = ExecuteCommand(command);	//ExecuteCommandはgroup_client_func_utf8.h参照
     }
     return endFlag;
 }
@@ -160,7 +160,7 @@ int RecvCharData(char *charData)
 		  int		dataSize	: 送るデータのサイズ
 出力	: なし
 *****************************************************************/
-void SendData(void *data,int dataSize)
+void SendData(void *data,int dataSize) //SendDataはgroup_client_func_utf8.h参照
 {
     /* 引き数チェック */
     assert(data != NULL);

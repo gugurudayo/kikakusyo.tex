@@ -55,16 +55,13 @@ int main(void){
 
 
     PlayerBullet playerBullets[MAX_PLAYER_BULLETS];
-    Bullet enemyBullets[MAX_BULLETS];
 
     for (int i = 0; i < MAX_PLAYER_BULLETS; i++) {
         playerBullets[i].active = 0;
     }
 
 
-    for (int i = 0; i < MAX_BULLETS; i++) {
-        enemyBullets[i].active = 0;
-    }
+    
 
 
     int shootTimer = 0;
@@ -93,31 +90,19 @@ int main(void){
     SDL_Texture* playerTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    SDL_Surface* enemysurface = IMG_Load("blue_ufo.png");
-    if (!enemysurface) {
-        printf("IMG_Load Error: %s\n", IMG_GetError());
-        SDL_Quit();
-        return 1;
-    }
-    SDL_Texture* enemyTexture = SDL_CreateTextureFromSurface(renderer, enemysurface);
-    SDL_FreeSurface(enemysurface);
-
+    
 
     SDL_Rect player = { 640 / 2 - 32, 480 - 70, 64, 64 };
     int speed = 5;
 
-    SDL_Rect enemy = { 640 / 2 - 60, 50, 120, 60 };
-    int enemySpeed = 5;
-    int enemyDirection = 1;
-    int enemyTimer = 0;
-    srand(SDL_GetTicks());
+    
 
     int running = 1;
     SDL_Event event;
 
     while (running) {
 
-        float bulletSpeed = (difficulty == 0) ? 5.0f : 7.0f;
+        
 
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
@@ -151,34 +136,7 @@ int main(void){
             if (player.y < 0) player.y = 0;
             if (player.y + player.h > 480) player.y = 480 - player.h;
 
-            // 敵の弾の発射
-            if (SDL_GetTicks() - gameStartTime >= 500) {
-                shootTimer++;
-                int shootInterval = (difficulty == 0) ? 40 + rand() % 30 : 20 + rand() % 15;
-                if (shootTimer >= shootInterval) {
-                    shootTimer = 0;
-
-                    int bulletW = 6;
-                    int bulletH = 16;
-
-                    float angles[3] = { -0.5f, 0.0f, 0.5f };
-                    for (int j = 0; j < 3; j++) {
-                        for (int i = 0; i < MAX_BULLETS; i++) {
-                            if (!enemyBullets[i].active) {
-                                enemyBullets[i].rect.x = enemy.x + enemy.w / 2 - bulletW / 2;
-                                enemyBullets[i].rect.y = enemy.y + enemy.h;
-                                enemyBullets[i].rect.w = bulletW;
-                                enemyBullets[i].rect.h = bulletH;
-                                enemyBullets[i].active = 1;
-                                float angle = angles[j] + ((rand() % 100 - 50) / 500.0f);
-                                enemyBullets[i].vx = sinf(angle) * bulletSpeed;
-                                enemyBullets[i].vy = cosf(angle) * bulletSpeed;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+           
 
             // プレイヤーの弾の発射
             if (playerShootCooldown > 0) {
@@ -208,33 +166,11 @@ int main(void){
                 }
             }
 
-            // 敵の弾の更新
-            for (int i = 0; i < MAX_BULLETS; i++) {
-                if (enemyBullets[i].active) {
-                    enemyBullets[i].rect.x += (int)enemyBullets[i].vx;
-                    enemyBullets[i].rect.y += (int)enemyBullets[i].vy;
-
-                    if (enemyBullets[i].rect.y > 480 || enemyBullets[i].rect.x < 0 || enemyBullets[i].rect.x > 640) {
-                        enemyBullets[i].active = 0;
-                    }
-                }
-            }
-
-            // 敵の移動
-            enemy.x += enemySpeed * enemyDirection;
-            enemyTimer++;
-            if (enemyTimer > 60) {
-                enemyTimer = 0;
-                if (rand() % 3 == 0) enemyDirection *= -1;
-                enemySpeed = 3 + rand() % 3;
-            }
-            if (enemy.x <= 0 || enemy.x + enemy.w >= 640) {
-                enemyDirection *= -1;
-            }
+            
 
             // 敵とプレイヤーの当たり判定
             SDL_Rect playerHitbox = { player.x + 16, player.y + 16, 32, 32 };
-            SDL_Rect enemyHitbox = { enemy.x + 10, enemy.y + 6, 110, 54 };
+            
 
             // 敵の弾とプレイヤーの当たり判定
             for (int i = 0; i < MAX_BULLETS; i++) {
@@ -366,7 +302,7 @@ int main(void){
 
                 // 弾のリセット
                 for (int i = 0; i < MAX_PLAYER_BULLETS; i++) playerBullets[i].active = 0;
-                for (int i = 0; i < MAX_BULLETS; i++) enemyBullets[i].active = 0;
+                
             }
         } else {
             // 通常のゲーム画面の描画
@@ -374,14 +310,8 @@ int main(void){
             SDL_RenderClear(renderer);
 
             SDL_RenderCopy(renderer, playerTexture, NULL, &player);
-            SDL_RenderCopy(renderer, enemyTexture, NULL, &enemy);
-
-            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-            for (int i = 0; i < MAX_BULLETS; i++) {
-                if (enemyBullets[i].active) {
-                    SDL_RenderFillRect(renderer, &enemyBullets[i].rect);
-                }
-            }
+            +6----
+            
 
             SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255);
             for (int i = 0; i < MAX_PLAYER_BULLETS; i++) {
@@ -390,7 +320,17 @@ int main(void){
                 }
             }
 
-            SDL_RenderPresent(renderer);
+            SDL_RenderPresentTTF_CloseFont(font);
+    TTF_Quit();
+
+    SDL_DestroyTexture(playerTexture);
+    
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    return 0;
+}(renderer);
         }
 
         SDL_Delay(16); 
@@ -400,7 +340,7 @@ int main(void){
     TTF_Quit();
 
     SDL_DestroyTexture(playerTexture);
-    SDL_DestroyTexture(enemyTexture);
+    
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

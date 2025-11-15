@@ -192,9 +192,6 @@ void Ending(void)
     for(i=0;i<gClientNum;i++)close(gClients[i].fd);
 }
 
-/*****
-static
-*****/
 /*****************************************************************
 関数名	: MultiAccept
 機能	: 接続要求のあったクライアントとのコネクションを設立する
@@ -283,7 +280,6 @@ static void SendAllName(void)
 static int RecvData(int pos,void *data,int dataSize)
 {
     int n;
-    
     /* 引き数チェック */
     assert(0<=pos && pos<gClientNum);
     assert(data!=NULL);

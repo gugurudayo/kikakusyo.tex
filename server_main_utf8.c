@@ -59,7 +59,5 @@ int main(int argc,char *argv[])
 *****************************************************************/
 static Uint32 SignalHandler(Uint32 interval, void *param)
 {
-	
-
 	return interval;
 }

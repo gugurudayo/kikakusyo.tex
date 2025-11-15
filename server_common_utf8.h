@@ -8,6 +8,6 @@
 
 #include"common_utf8.h"
 
-#define ALL_CLIENTS	-1   /* 全クライアントにデータを送る時に使用する */
+#define ALL_CLIENTS	-1  
 
 #endif

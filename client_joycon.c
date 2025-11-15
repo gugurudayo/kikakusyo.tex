@@ -95,6 +95,23 @@ int main(int argc, char *argv[]) {
         close(sock);
         return 1;
     }
+    SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK);
+
+    SDL_GameController *pad0 = NULL;
+    SDL_GameController *pad1 = NULL;
+
+    // Joy-Con を探す
+    int numJoy = SDL_NumJoysticks();
+    printf("Detected %d joy-cons (controllers)\n", numJoy);
+
+    int found = 0;
+    for (int i = 0; i < numJoy; i++) {
+    if (SDL_IsGameController(i)) {
+        if (found == 0) pad0 = SDL_GameControllerOpen(i);
+        else if (found == 1) pad1 = SDL_GameControllerOpen(i);
+        found++;
+        }
+    }
 
     SDL_Window *window = SDL_CreateWindow(
         "2P Network Shooting (sample)",
@@ -138,12 +155,32 @@ int main(int argc, char *argv[]) {
             if (keys[SDL_SCANCODE_D]) dx =  1;
             if (keys[SDL_SCANCODE_W]) dy = -1;
             if (keys[SDL_SCANCODE_S]) dy =  1;
-        } else {
+            
+            // ★ Joy-Con 0 の入力（左スティック）
+            if (pad0 != NULL) {
+            Sint16 ax = SDL_GameControllerGetAxis(pad0, SDL_CONTROLLER_AXIS_LEFTX);
+            Sint16 ay = SDL_GameControllerGetAxis(pad0, SDL_CONTROLLER_AXIS_LEFTY);
+
+            if (ax < -8000) dx = -1;
+            if (ax >  8000) dx =  1;
+            if (ay < -8000) dy = -1;
+            if (ay >  8000) dy =  1;
+            } else {
             // プレイヤー1: 矢印キー
             if (keys[SDL_SCANCODE_LEFT])  dx = -1;
             if (keys[SDL_SCANCODE_RIGHT]) dx =  1;
             if (keys[SDL_SCANCODE_UP])    dy = -1;
             if (keys[SDL_SCANCODE_DOWN])  dy =  1;
+            // ★ Joy-Con 1 の入力（左スティック）
+            if (pad1 != NULL) {
+            Sint16 ax = SDL_GameControllerGetAxis(pad1, SDL_CONTROLLER_AXIS_LEFTX);
+            Sint16 ay = SDL_GameControllerGetAxis(pad1, SDL_CONTROLLER_AXIS_LEFTY);
+
+            if (ax < -8000) dx = -1;
+            if (ax >  8000) dx =  1;
+            if (ay < -8000) dy = -1;
+            if (ay >  8000) dy =  1;
+        }
         }
 
         // 移動パケット送信
@@ -203,6 +240,9 @@ int main(int argc, char *argv[]) {
 
         SDL_Delay(16); // 約60fps
     }
+
+    if (pad0) SDL_GameControllerClose(pad0);
+    if (pad1) SDL_GameControllerClose(pad1);
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

@@ -1,0 +1,10 @@
+同じ端末でやるとき
+
+$ gcc server.c -o server
+gcc client.c -o client `sdl2-config --cflags --libs` -lSDL2_image
+
+$ ./server
+$ ./client 127.0.0.1 0
+$ ./client 127.0.0.1 1
+
+

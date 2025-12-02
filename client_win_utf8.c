@@ -16,6 +16,7 @@
 #define BACKGROUND_IMAGE "22823124.jpg" 
 #define RESULT_IMAGE "Chatgpt.png"     
 #define RESULT_BACK_IMAGE "2535410.jpg" 
+#define WEAPON_ICON_IMAGE "1192635.png"
 #define FONT_PATH "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf"
 #define DEFAULT_WINDOW_WIDTH 1300
 #define DEFAULT_WINDOW_HEIGHT 1000
@@ -33,6 +34,7 @@ static SDL_Renderer *gMainRenderer = NULL;
 static SDL_Texture *gBackgroundTexture = NULL;
 static SDL_Texture *gResultTexture = NULL;
 static SDL_Texture *gResultBackTexture = NULL;
+static SDL_Texture *gWeaponIconTexture = NULL; // ★ 追加: 武器アイコンテクスチャ ★
 static TTF_Font *gFontLarge = NULL;
 static TTF_Font *gFontNormal = NULL;
 static TTF_Font *gFontRank = NULL; 
@@ -138,6 +140,14 @@ static void DrawImageAndText(void){
         SDL_SetRenderDrawColor(gMainRenderer,255,255,0,255); SDL_RenderFillRect(gMainRenderer,&r);
         r.x=rightX;
         SDL_SetRenderDrawColor(gMainRenderer,0,255,0,255); SDL_RenderFillRect(gMainRenderer,&r);
+        if (gWeaponIconTexture) {
+            int iconW = 64; // アイコンのサイズ（適当な値を設定。必要に応じて変更してください）
+            int iconH = 64; 
+            
+            // 黄色の長方形の座標 (leftX, bottomY)
+            SDL_Rect destRect = { leftX + 10, bottomY + 10, iconW, iconH }; // 左上隅から少し内側に配置
+            SDL_RenderCopy(gMainRenderer, gWeaponIconTexture, NULL, &destRect);
+        }
     }
     else if (gCurrentScreenState == SCREEN_STATE_RESULT){
         if (gResultTexture) SDL_RenderCopy(gMainRenderer,gResultTexture,NULL,NULL);
@@ -243,14 +253,31 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE]){
 	SDL_Surface *bg = IMG_Load(BACKGROUND_IMAGE);
 	SDL_Surface *res = IMG_Load(RESULT_IMAGE);
 	SDL_Surface *resBack = IMG_Load(RESULT_BACK_IMAGE); // ★ 新しい画像をロード ★
+    SDL_Surface *icon = IMG_Load(WEAPON_ICON_IMAGE);
 
-	gMainWindow = SDL_CreateWindow("Game UI", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, windowW, windowH, 0);
+	const char *myWindowTitle = gAllClientNames[gMyClientID];
+
+    gMainWindow = SDL_CreateWindow(myWindowTitle, 
+                                 SDL_WINDOWPOS_CENTERED, 
+                                 SDL_WINDOWPOS_CENTERED, 
+                                 windowW, 
+                                 windowH, 
+                                 0);
+
 	gMainRenderer = SDL_CreateRenderer(gMainWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
 	if (bg) { gBackgroundTexture = SDL_CreateTextureFromSurface(gMainRenderer,bg); SDL_FreeSurface(bg); }
 	if (res) { gResultTexture = SDL_CreateTextureFromSurface(gMainRenderer,res); SDL_FreeSurface(res); }
 	if (resBack) { gResultBackTexture = SDL_CreateTextureFromSurface(gMainRenderer,resBack); SDL_FreeSurface(resBack); } // ★ テクスチャを作成 ★
 
+    // ★ 追加: アイコンテクスチャを作成し、サーフェスを解放 ★
+    if (icon) { 
+        gWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon);
+        SDL_FreeSurface(icon); 
+    } else {
+        fprintf(stderr, "Failed to load weapon icon: 1192635.png\n");
+    }
+    
 	/* 初期画面はロビー待機画面 (SCREEN_STATE_LOBBY_WAIT) に変更 */
 	gCurrentScreenState = SCREEN_STATE_LOBBY_WAIT;
 	DrawImageAndText();
@@ -266,6 +293,7 @@ void DestroyWindow(void){
 	if (gResultTexture) SDL_DestroyTexture(gResultTexture);
 	if (gBackgroundTexture) SDL_DestroyTexture(gBackgroundTexture);
 	if (gResultBackTexture) SDL_DestroyTexture(gResultBackTexture); // ★ 破棄処理を追加 ★
+    if (gWeaponIconTexture) SDL_DestroyTexture(gWeaponIconTexture);
 	if (gMainRenderer) SDL_DestroyRenderer(gMainRenderer);
 	if (gMainWindow) SDL_DestroyWindow(gMainWindow);
 	// TTF_Quit を維持

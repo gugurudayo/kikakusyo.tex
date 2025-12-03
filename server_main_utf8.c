@@ -1,7 +1,4 @@
-/*****************************************************************
-ファイル名	: server_main_utf8.c
-機能		: サーバーのメインルーチン
-*****************************************************************/
+/*server_main_utf8.c*/
 
 #include<SDL2/SDL.h>
 #include"server_common_utf8.h"
@@ -49,14 +46,6 @@ int main(int argc,char *argv[])
 
 	return 0;
 }
-
-/*****************************************************************
-関数名  : SignalHandler
-機能    : 割り込み用関数 
-引数    : Uint32	interval	: タイマー
-		  void		*param		: 割り込み処理の引数
-出力    : タイマーの次の間隔
-*****************************************************************/
 static Uint32 SignalHandler(Uint32 interval, void *param)
 {
 	return interval;

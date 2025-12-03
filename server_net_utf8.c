@@ -1,7 +1,4 @@
-/*****************************************************************
-ファイル名	: server_net_utf8.c
-機能		: サーバーのネットワーク処理
-*****************************************************************/
+/*server_net_utf8.c*/
 
 #include"server_common_utf8.h"
 #include"server_func_utf8.h"
@@ -21,13 +18,7 @@ static void SetMask(int maxfd);
 static void SendAllName(void);
 static int RecvData(int pos,void *data,int dataSize);
 
-/*****************************************************************
-関数名	: SetUpServer
-機能	: クライアントとのコネクションを設立し，
-		  ユーザーの名前の送受信を行う
-引数	: int		num		  : クライアント数
-出力	: コネクションに失敗した時-1,成功した時0
-*****************************************************************/
+
 int SetUpServer(int num)
 {
     struct sockaddr_in	server;
@@ -81,27 +72,18 @@ int SetUpServer(int num)
     return 0;
 }
 
-/*****************************************************************
-関数名	: SendRecvManager
-機能	: サーバーから送られてきたデータを処理する
-引数	: なし
-出力	: プログラム終了コマンドが送られてきた時0を返す．
-		  それ以外は1を返す
-*****************************************************************/
 int SendRecvManager(void)
 {
     char	command;
     fd_set	readOK;
     int		i;
     int		endFlag = 1;
-
     readOK = gMask;
     /* クライアントからデータが届いているか調べる */
     if(select(gWidth,&readOK,NULL,NULL,NULL) < 0){
         /* エラーが起こった */
         return endFlag;
     }
-
     for(i=0;i<gClientNum;i++){
 		if(FD_ISSET(gClients[i].fd,&readOK)){
 	    	/* クライアントからデータが届いていた */
@@ -114,52 +96,25 @@ int SendRecvManager(void)
     }
     return endFlag;
 }
-
-/*****************************************************************
-関数名 : GetClientNum
-機能  : 接続中のクライアント数を返す
-引数  : なし
-出力  : クライアント数
-*****************************************************************/
 int GetClientNum(void)
 {
     return gClientNum;
 }
 
-/*****************************************************************
-関数名	: RecvIntData
-機能	: クライアントからint型のデータを受け取る
-引数	: int		pos	        : クライアント番号
-		  int		*intData	: 受信したデータ
-出力	: 受け取ったバイト数
-*****************************************************************/
 int RecvIntData(int pos,int *intData)
 {
     int n,tmp;
-    
     /* 引き数チェック */
     assert(0<=pos && pos<gClientNum);
     assert(intData!=NULL);
-
     n = RecvData(pos,&tmp,sizeof(int));
     (*intData) = ntohl(tmp);
-    
     return n;
 }
 
-/*****************************************************************
-関数名	: SendData
-機能	: クライアントにデータを送る
-引数	: int	   pos		: クライアント番号
-							  ALL_CLIENTSが指定された時には全員に送る
-		  void	   *data	: 送るデータ
-		  int	   dataSize	: 送るデータのサイズ
-出力	: なし
-*****************************************************************/
 void SendData(int pos,void *data,int dataSize)
 {
     int	i;
-   
     /* 引き数チェック */
     assert(0<=pos && pos<gClientNum || pos==ALL_CLIENTS);
     assert(data!=NULL);
@@ -176,32 +131,17 @@ void SendData(int pos,void *data,int dataSize)
     }
 }
 
-/*****************************************************************
-関数名	: Ending
-機能	: 全クライアントとのコネクションを切断する
-引数	: なし
-出力	: なし
-*****************************************************************/
 void Ending(void)
 {
     int	i;
-
     printf("... Connection closed\n");
     for(i=0;i<gClientNum;i++)close(gClients[i].fd);
 }
 
-/*****************************************************************
-関数名	: MultiAccept
-機能	: 接続要求のあったクライアントとのコネクションを設立する
-引数	: int		request_soc	: ソケット
-		  int		num     	: クライアント数
-出力	: ソケットディスクリプタ
-*****************************************************************/
 static int MultiAccept(int request_soc,int num)
 {
     int	i,j;
     int	fd;
-    
     for(i=0;i<num;i++){
 		if((fd = accept(request_soc,NULL,NULL)) == -1){
 			fprintf(stderr,"Accept error\n");
@@ -213,13 +153,6 @@ static int MultiAccept(int request_soc,int num)
     return fd;
 }
 
-/*****************************************************************
-関数名	: Enter
-機能	: クライアントのユーザー名を受信する
-引数	: int		pos		: クライアント番号
-		  int		fd		: ソケットディスクリプタ
-出力	: なし
-*****************************************************************/
 static void Enter(int pos, int fd)
 {
 	/* クライアントのユーザー名を受信する */
@@ -229,33 +162,17 @@ static void Enter(int pos, int fd)
 #endif
 	gClients[pos].fd = fd;
 }
-
-/*****************************************************************
-関数名	: SetMask
-機能	: int		maxfd	: ソケットディスクリプタの最大値
-引数	: なし
-出力	: なし
-*****************************************************************/
 static void SetMask(int maxfd)
 {
     int	i;
-
     gWidth = maxfd+1;
-
     FD_ZERO(&gMask);    
     for(i=0;i<gClientNum;i++)FD_SET(gClients[i].fd,&gMask);
 }
 
-/*****************************************************************
-関数名	: SendAllName
-機能	: 全クライアントに全ユーザー名を送る
-引数	: なし
-出力	: なし
-*****************************************************************/
 static void SendAllName(void)
 {
   int	i,j,tmp1,tmp2;
-
     tmp2 = htonl(gClientNum);
     for(i=0;i<gClientNum;i++){
 		tmp1 = htonl(i);
@@ -267,14 +184,6 @@ static void SendAllName(void)
 	}
 }
 
-/*****************************************************************
-関数名	: RecvData
-機能	: クライアントからデータを受け取る
-引数	: int		pos	        : クライアント番号
-		  void		*data		: 受信したデータ
-		  int		dataSize	: 受信するデータのサイズ
-出力	: 受け取ったバイト数
-*****************************************************************/
 static int RecvData(int pos,void *data,int dataSize)
 {
     int n;
@@ -282,8 +191,19 @@ static int RecvData(int pos,void *data,int dataSize)
     assert(0<=pos && pos<gClientNum);
     assert(data!=NULL);
     assert(0<dataSize);
+    n = read(gClients[pos].fd,data,dataSize); 
+    return n;
+}
 
-    n = read(gClients[pos].fd,data,dataSize);
+int RecvCharData(int pos,char *charData)
+{
+    int n;
+    /* 引き数チェック */
+    assert(0<=pos && pos<gClientNum); 
+    assert(charData!=NULL);
     
+    // RecvData はサーバー側のヘルパー関数
+    n = RecvData(pos, charData, sizeof(char)); 
+
     return n;
 }

@@ -1,3 +1,4 @@
+/*server_func_utf8.h*/
 #ifndef _SERVER_FUNC_H_
 #define _SERVER_FUNC_H_
 
@@ -15,6 +16,7 @@ extern CLIENT gClients[MAX_CLIENTS];
 extern int SetUpServer(int num);
 extern void Ending(void);
 extern int RecvIntData(int pos,int *intData);
+extern int RecvCharData(int pos,char *charData); // ★ 追加: RecvCharDataの宣言
 extern void SendData(int pos,void *data,int dataSize);
 extern int SendRecvManager(void);
 extern int GetClientNum(void);
@@ -23,5 +25,7 @@ extern int GetClientNum(void);
 extern int ExecuteCommand(char command,int pos);
 extern void SendDiamondCommand(void);
 extern void SendDataToClient(int clientID, const void *data, int dataSize);
+extern int gPlayerPosX[MAX_CLIENTS];
+extern int gPlayerPosY[MAX_CLIENTS];
 
 #endif

@@ -1,0 +1,69 @@
+Enter Your Name
+Please Wait
+Client 1 pressed X
+Client 0 pressed X
+Received NEXT_SCREEN_COMMAND. Transitioning screen.
+DEBUG(CLIENT 0): Entered GAME_SCREEN. gWeaponSent reset to 0.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=0. gWeaponSent=0
+Sent selection ID 0 to server.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=0. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=0. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=0. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=0. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=0. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=0. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=1. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=1. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=1. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=1. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+Received NEXT_SCREEN_COMMAND. Transitioning screen.
+DEBUG(CLIENT 0): Entered GAME_SCREEN. gWeaponSent reset to 0.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=1. gWeaponSent=0
+Sent selection ID 1 to server.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=1. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=1. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=0. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=0. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=2. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=3. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=3. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+DEBUG(CLIENT 0): Mouse DOWN event detected.
+DEBUG(CLIENT 0): Mouse clicked. selectedID=3. gWeaponSent=1
+DEBUG(CLIENT 0): Selection already sent, ignoring click.
+...Connection closed

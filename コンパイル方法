@@ -7,4 +7,8 @@ $ ./server
 $ ./client 127.0.0.1 0
 $ ./client 127.0.0.1 1
 
+client_joycon_new.cコンパイルコード
+gcc 'client_joycon _new.c' -o client -ljoyconlib -lhidapi-hidraw -lSDL2 -lm
+server_joycon_new.cコンパイルコード
+gcc 'server_joycon _new.c' -o server -ljoyconlib -lhidapi-hidraw -lSDL2 -lm
 

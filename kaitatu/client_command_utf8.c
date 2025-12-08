@@ -95,6 +95,32 @@ int ExecuteCommand(char command)
             DrawImageAndText(); // 新しい弾の描画を開始するため画面更新
             break;
         }
+
+        case APPLY_DAMAGE_COMMAND: // ★ 追加: ダメージ適用コマンド
+        {
+            int targetClientID;
+            int damageAmount;
+            
+            // サーバーから送られた「誰に」「どれだけ」の情報を読み取り
+            RecvIntData(&targetClientID);
+            RecvIntData(&damageAmount);
+
+            // ★ 修正: ターゲットIDのHPを更新する（全クライアントで同期）★
+            if (targetClientID >= 0 && targetClientID < MAX_CLIENTS) {
+                
+                // ターゲットのHPを減算
+                gPlayerHP[targetClientID] -= damageAmount;
+                
+                // HPが負の値にならないようにクランプ
+                if (gPlayerHP[targetClientID] < 0) {
+                    gPlayerHP[targetClientID] = 0;
+                }
+            }
+            
+            DrawImageAndText(); // HPバー更新のため再描画
+            break;
+        }
+        
         default:
             break;
     }

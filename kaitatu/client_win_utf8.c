@@ -13,7 +13,10 @@
 #define BACKGROUND_IMAGE "22823124.jpg" 
 #define RESULT_IMAGE "Chatgpt.png"     
 #define RESULT_BACK_IMAGE "2535410.jpg" 
-#define WEAPON_ICON_IMAGE "1192635.png"
+#define YELLOW_WEAPON_ICON_IMAGE "1192635.png" // ID 2 用 (黄色)
+#define BLUE_WEAPON_ICON_IMAGE "862582.png"   // ID 1 用 (青)
+#define RED_WEAPON_ICON_IMAGE "23667746.png"  // ID 0 用 (赤)
+#define GREEN_WEAPON_ICON_IMAGE "1499296.png" // ★ 追加: ID 3 用 (緑) ★
 #define FONT_PATH "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf"
 #define DEFAULT_WINDOW_WIDTH 1300
 #define DEFAULT_WINDOW_HEIGHT 1000
@@ -33,7 +36,10 @@ static SDL_Renderer *gMainRenderer = NULL;
 static SDL_Texture *gBackgroundTexture = NULL;
 static SDL_Texture *gResultTexture = NULL;
 static SDL_Texture *gResultBackTexture = NULL;
-static SDL_Texture *gWeaponIconTexture = NULL; 
+static SDL_Texture *gYellowWeaponIconTexture = NULL; // ID 2 用
+static SDL_Texture *gBlueWeaponIconTexture = NULL;   // ID 1 用
+static SDL_Texture *gRedWeaponIconTexture = NULL;    // ID 0 用
+static SDL_Texture *gGreenWeaponIconTexture = NULL;  // ★ 追記: ID 3 用 ★
 static TTF_Font *gFontLarge = NULL;
 static TTF_Font *gFontNormal = NULL;
 static TTF_Font *gFontRank = NULL; 
@@ -239,12 +245,31 @@ void DrawImageAndText(void){
                                   255, 255, 255, gFontNormal); // 白文字で描画
             }
             
-        }
-        if (gWeaponIconTexture) {
-            int iconW = 64; 
-            int iconH = 64;            
-            SDL_Rect destRect = { leftX + 10, bottomY + 10, iconW, iconH }; 
-            SDL_RenderCopy(gMainRenderer, gWeaponIconTexture, NULL, &destRect);
+            // ★ 追記/修正: アイコンの描画ロジックを統合 ★
+            SDL_Texture *iconToDraw = NULL;
+            if (i == 0) { // 赤色 (武器ID 0) の場合
+                iconToDraw = gRedWeaponIconTexture;
+            } else if (i == 1) { // 青色 (武器ID 1) の場合
+                iconToDraw = gBlueWeaponIconTexture;
+            } else if (i == 2) { // 黄色 (武器ID 2) の場合
+                iconToDraw = gYellowWeaponIconTexture;
+            } else if (i == 3) { // ★ 追記: 緑色 (武器ID 3) の場合 ★
+                iconToDraw = gGreenWeaponIconTexture;
+            }
+
+            if (iconToDraw) {
+                int iconW = 150; 
+                int iconH = 64;  
+                int margin = 10; 
+                
+                SDL_Rect destRect = { 
+                    r.x + textPadding, 
+                    r.y + r.h - iconH - margin, // 長方形の下端に配置
+                    iconW, 
+                    iconH 
+                }; 
+                SDL_RenderCopy(gMainRenderer, iconToDraw, NULL, &destRect);
+            }
         }
     }
     else if (gCurrentScreenState == SCREEN_STATE_RESULT){
@@ -393,7 +418,11 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE]){
     SDL_Surface *bg = IMG_Load(BACKGROUND_IMAGE);
     SDL_Surface *res = IMG_Load(RESULT_IMAGE);
     SDL_Surface *resBack = IMG_Load(RESULT_BACK_IMAGE); 
-    SDL_Surface *icon = IMG_Load(WEAPON_ICON_IMAGE);
+    SDL_Surface *icon_yellow = IMG_Load(YELLOW_WEAPON_ICON_IMAGE); 
+    SDL_Surface *icon_blue = IMG_Load(BLUE_WEAPON_ICON_IMAGE);   
+    SDL_Surface *icon_red = IMG_Load(RED_WEAPON_ICON_IMAGE);
+    SDL_Surface *icon_green = IMG_Load(GREEN_WEAPON_ICON_IMAGE); // ★ 追記: 緑色用のアイコンをロード ★
+    
     const char *myWindowTitle = gAllClientNames[gMyClientID];
     gMainWindow = SDL_CreateWindow(myWindowTitle,SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,windowW,windowH,0);
 
@@ -402,12 +431,33 @@ int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE]){
     if (bg) { gBackgroundTexture = SDL_CreateTextureFromSurface(gMainRenderer,bg); SDL_FreeSurface(bg); }
     if (res) { gResultTexture = SDL_CreateTextureFromSurface(gMainRenderer,res); SDL_FreeSurface(res); }
     if (resBack) { gResultBackTexture = SDL_CreateTextureFromSurface(gMainRenderer,resBack); SDL_FreeSurface(resBack); } 
-    if (icon) { 
-        gWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon);
-        SDL_FreeSurface(icon); 
+    
+    // テクスチャ作成
+    if (icon_yellow) { 
+        gYellowWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_yellow);
+        SDL_FreeSurface(icon_yellow); 
     } else {
-        fprintf(stderr, "Failed to load weapon icon: 1192635.png\n");
+        fprintf(stderr, "Failed to load yellow weapon icon: %s\n", YELLOW_WEAPON_ICON_IMAGE);
     }
+    if (icon_blue) { 
+        gBlueWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_blue);
+        SDL_FreeSurface(icon_blue);
+    } else {
+        fprintf(stderr, "Failed to load blue weapon icon: %s\n", BLUE_WEAPON_ICON_IMAGE);
+    }
+    if (icon_red) { 
+        gRedWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_red);
+        SDL_FreeSurface(icon_red);
+    } else {
+        fprintf(stderr, "Failed to load red weapon icon: %s\n", RED_WEAPON_ICON_IMAGE);
+    }
+    if (icon_green) { // ★ 追記: 緑色アイコンのテクスチャを作成 ★
+        gGreenWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_green);
+        SDL_FreeSurface(icon_green);
+    } else {
+        fprintf(stderr, "Failed to load green weapon icon: %s\n", GREEN_WEAPON_ICON_IMAGE);
+    }
+    
     /* 初期画面はロビー待機画面 (SCREEN_STATE_LOBBY_WAIT) に変更 */
     gCurrentScreenState = SCREEN_STATE_LOBBY_WAIT;
     
@@ -459,7 +509,10 @@ void DestroyWindow(void){
     if (gResultTexture) SDL_DestroyTexture(gResultTexture);
     if (gBackgroundTexture) SDL_DestroyTexture(gBackgroundTexture);
     if (gResultBackTexture) SDL_DestroyTexture(gResultBackTexture); // ★ 破棄処理を追加 ★
-    if (gWeaponIconTexture) SDL_DestroyTexture(gWeaponIconTexture);
+    if (gYellowWeaponIconTexture) SDL_DestroyTexture(gYellowWeaponIconTexture);
+    if (gBlueWeaponIconTexture) SDL_DestroyTexture(gBlueWeaponIconTexture); 
+    if (gRedWeaponIconTexture) SDL_DestroyTexture(gRedWeaponIconTexture); 
+    if (gGreenWeaponIconTexture) SDL_DestroyTexture(gGreenWeaponIconTexture); // ★ 追記: 4つ目のテクスチャの破棄 ★
     if (gMainRenderer) SDL_DestroyRenderer(gMainRenderer);
     if (gMainWindow) SDL_DestroyWindow(gMainWindow);
     // TTF_Quit を維持

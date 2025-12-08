@@ -710,7 +710,7 @@ void SetScreenState(int state){
     DrawImageAndText(); 
     // 結果画面表示時にタイマーを設定
     if (state == SCREEN_STATE_RESULT) {
-        SDL_AddTimer(30000, BackToTitleScreen, NULL);//制限時間
+        SDL_AddTimer(90000, BackToTitleScreen, NULL);//制限時間
     }
 }
 

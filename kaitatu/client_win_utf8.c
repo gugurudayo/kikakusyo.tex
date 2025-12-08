@@ -84,7 +84,7 @@ void InitProjectiles(void)
 // 弾の更新と描画を行う関数
 void UpdateAndDrawProjectiles(void)
 {
-    const int SQ_SIZE = 25; // 弾のサイズ (非常に小さい円)
+    const int SQ_SIZE = 5; // 弾のサイズ (非常に小さい円)
 
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         if (gProjectiles[i].active) {
@@ -265,38 +265,28 @@ void DrawImageAndText(void){
             SDL_SetRenderDrawColor(gMainRenderer, r, g, b, 255);
             SDL_RenderFillRect(gMainRenderer, &playerRect);
             
-            // ★★★ 体力バーの描画 (ここから追加) ★★★
             if (currentHP > 0) {
-                // 1. HPバーの背景 (最大HPを示す黒枠)
-                SDL_Rect bgRect = {
-                    gPlayerPosX[i],
-                    gPlayerPosY[i] - HP_BAR_HEIGHT - 2, // プレイヤー正方形の上2px
-                    HP_BAR_WIDTH,
-                    HP_BAR_HEIGHT
-                };
-                SDL_SetRenderDrawColor(gMainRenderer, 0, 0, 0, 255); // 黒
-                SDL_RenderDrawRect(gMainRenderer, &bgRect);
-
-                // 2. 現在のHP残量 (色付きのバー)
-                // HPの残量を最大HP (MAX_HP=150) から計算
-                int hpWidth = (int)((float)currentHP / MAX_HP * HP_BAR_WIDTH); 
-
-                SDL_Rect hpRect = {
-                    gPlayerPosX[i],
-                    gPlayerPosY[i] - HP_BAR_HEIGHT - 2,
-                    hpWidth,
-                    HP_BAR_HEIGHT
-                };
+                char hpText[16];
+                sprintf(hpText, "HP: %d", currentHP);
                 
-                // 体力に応じて色を変更（例: 瀕死時は赤）
-                if (currentHP < MAX_HP * 0.25) {
-                    SDL_SetRenderDrawColor(gMainRenderer, 255, 0, 0, 255); // 赤 (低HP)
-                } else {
-                    SDL_SetRenderDrawColor(gMainRenderer, 0, 255, 0, 255); // 緑 (通常HP)
+                // HPの数値表示位置: プレイヤー正方形の少し上
+                int textX = gPlayerPosX[i];
+                int textY = gPlayerPosY[i] - 20; // 20px上に表示
+                
+                Uint8 textR = 255, textG = 255, textB = 255; // デフォルトは白
+                
+                // HPが低い場合は赤にする
+                if (currentHP <= MAX_HP / 4) {
+                    textR = 255; textG = 0; textB = 0;
                 }
-                SDL_RenderFillRect(gMainRenderer, &hpRect);
+
+                // DrawText_Internal を使用してHP値を描画
+                DrawText_Internal(hpText, 
+                                  textX, 
+                                  textY, 
+                                  textR, textG, textB, 
+                                  gFontNormal); // gFontNormal を使用
             }
-            // ★★★ 体力バーの描画 (ここまで追加) ★★★
 
             // 自分のプレイヤーには枠を描画して強調
             if (i == gMyClientID) {
@@ -527,8 +517,8 @@ void WindowEvent(int num){
                         SendData(data, dataSize);
 
                         // 自分の座標を即座に更新し、描画を更新（レスポンスを良くするため）
-                        UpdatePlayerPos(gMyClientID, direction); 
-                        DrawImageAndText();
+                        //UpdatePlayerPos(gMyClientID, direction); 
+                        //DrawImageAndText();
                     }
                 }
                 break;

@@ -666,24 +666,56 @@ void SetScreenState(int state){
 }
 
 // プレイヤーの座標を更新するヘルパー関数（境界チェックなし）
+// プレイヤーの座標を更新するヘルパー関数（境界チェックを追加）
 void UpdatePlayerPos(int clientID, char direction)
 {
     if (clientID < 0 || clientID >= MAX_CLIENTS) return;
 
     int step = gPlayerMoveStep[clientID];
+    int currentX = gPlayerPosX[clientID];
+    int currentY = gPlayerPosY[clientID];
+    int newX = currentX;
+    int newY = currentY;
+
+    // ウィンドウサイズを取得
+    int windowW, windowH;
+    SDL_GetWindowSize(gMainWindow, &windowW, &windowH);
+
+    // プレイヤーのサイズ（ここでは 50x50 と仮定）
+    const int SQ_SIZE = 50; 
     
+    // 1. 移動後の新しい座標を計算
     switch (direction) {
         case DIR_UP:
-            gPlayerPosY[clientID] -= step;
+            newY = currentY - step;
             break;
         case DIR_DOWN:
-            gPlayerPosY[clientID] += step;
+            newY = currentY + step;
             break;
         case DIR_LEFT:
-            gPlayerPosX[clientID] -= step;
+            newX = currentX - step;
             break;
         case DIR_RIGHT:
-            gPlayerPosX[clientID] += step;
+            newX = currentX + step;
             break;
     }
+
+    // 2. 境界チェックを行い、座標を制限する
+    // X軸のチェック
+    if (newX < 0) {
+        newX = 0; // 左端 (0) より小さくならないようにする
+    } else if (newX > windowW - SQ_SIZE) {
+        newX = windowW - SQ_SIZE; // 右端 (ウィンドウ幅 - プレイヤーサイズ) を超えないようにする
+    }
+
+    // Y軸のチェック
+    if (newY < 0) {
+        newY = 0; // 上端 (0) より小さくならないようにする
+    } else if (newY > windowH - SQ_SIZE) {
+        newY = windowH - SQ_SIZE; // 下端 (ウィンドウ高 - プレイヤーサイズ) を超えないようにする
+    }
+
+    // 3. 制限された座標で更新
+    gPlayerPosX[clientID] = newX;
+    gPlayerPosY[clientID] = newY;
 }

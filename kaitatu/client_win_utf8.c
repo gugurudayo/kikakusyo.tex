@@ -9,6 +9,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h> 
+#include <stdlib.h> // qsortを使用するために必要
 
 #define BACKGROUND_IMAGE "22823124.jpg" 
 #define RESULT_IMAGE "Chatgpt.png"     
@@ -16,7 +17,7 @@
 #define YELLOW_WEAPON_ICON_IMAGE "1192635.png" // ID 2 用 (黄色)
 #define BLUE_WEAPON_ICON_IMAGE "862582.png"   // ID 1 用 (青)
 #define RED_WEAPON_ICON_IMAGE "23667746.png"  // ID 0 用 (赤)
-#define GREEN_WEAPON_ICON_IMAGE "1499296.png" // ★ 追加: ID 3 用 (緑) ★
+#define GREEN_WEAPON_ICON_IMAGE "1499296.png" // ID 3 用 (緑)
 #define FONT_PATH "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf"
 #define DEFAULT_WINDOW_WIDTH 1300
 #define DEFAULT_WINDOW_HEIGHT 1000
@@ -39,7 +40,7 @@ static SDL_Texture *gResultBackTexture = NULL;
 static SDL_Texture *gYellowWeaponIconTexture = NULL; // ID 2 用
 static SDL_Texture *gBlueWeaponIconTexture = NULL;   // ID 1 用
 static SDL_Texture *gRedWeaponIconTexture = NULL;    // ID 0 用
-static SDL_Texture *gGreenWeaponIconTexture = NULL;  // ★ 追記: ID 3 用 ★
+static SDL_Texture *gGreenWeaponIconTexture = NULL;  // ID 3 用
 static TTF_Font *gFontLarge = NULL;
 static TTF_Font *gFontNormal = NULL;
 static TTF_Font *gFontRank = NULL; 
@@ -161,6 +162,40 @@ static void DrawText_Internal(const char* text,int x,int y,Uint8 r,Uint8 g,Uint8
     SDL_DestroyTexture(tex);
 }
 
+// ★ 追記: HPに基づいて順位を計算するロジック ★
+// プレイヤーIDとそのHPを保持する構造体
+typedef struct {
+    int id;
+    int hp;
+} PlayerScore;
+
+// qsort用の比較関数 (HPが高い順にソート)
+int ComparePlayerScores(const void *a, const void *b) {
+    const PlayerScore *scoreA = (const PlayerScore *)a;
+    const PlayerScore *scoreB = (const PlayerScore *)b;
+    // HPが高い方を上位 (降順) にする
+    return scoreB->hp - scoreA->hp;
+}
+
+// HPに基づいてプレイヤーIDの順位リストを返す関数
+void GetRankedPlayerIDs(int *rankedIDs) {
+    PlayerScore scores[MAX_CLIENTS];
+    int numClients = gClientCount; // グローバル変数 gClientCount を使用
+
+    for (int i = 0; i < numClients; i++) {
+        scores[i].id = i;
+        scores[i].hp = gPlayerHP[i]; // 現在のHPを使用
+    }
+
+    // HPが高い順にソート
+    qsort(scores, numClients, sizeof(PlayerScore), ComparePlayerScores);
+
+    // ソートされたIDを結果の配列に格納
+    for (int i = 0; i < numClients; i++) {
+        rankedIDs[i] = scores[i].id;
+    }
+}
+
 /* DrawImageAndText: 状態に応じた描画 */
 void DrawImageAndText(void){
     int w=800,h=600;
@@ -253,8 +288,8 @@ void DrawImageAndText(void){
                 iconToDraw = gBlueWeaponIconTexture;
             } else if (i == 2) { // 黄色 (武器ID 2) の場合
                 iconToDraw = gYellowWeaponIconTexture;
-            } else if (i == 3) { // ★ 追記: 緑色 (武器ID 3) の場合 ★
-                iconToDraw = gGreenWeaponIconTexture;
+            } else if (i == 3) { // 緑色 (武器ID 3) の場合
+                iconToDraw = gGreenWeaponIconTexture; 
             }
 
             if (iconToDraw) {
@@ -332,6 +367,10 @@ void DrawImageAndText(void){
         UpdateAndDrawProjectiles();
     }
     else if (gCurrentScreenState == SCREEN_STATE_TITLE){
+        // ★ 追記: HPに基づいて順位を計算し、プレイヤーIDを取得 ★
+        int rankedIDs[MAX_CLIENTS];
+        GetRankedPlayerIDs(rankedIDs);
+        
         if (gResultBackTexture) SDL_RenderCopy(gMainRenderer,gResultBackTexture,NULL,NULL);
         else { SDL_SetRenderDrawColor(gMainRenderer,0,0,255,255); SDL_RenderFillRect(gMainRenderer,NULL); }
         int titleBottomY = 0;
@@ -353,7 +392,7 @@ void DrawImageAndText(void){
         // 結果ボックス描画
         int topMargin = 20;
         int bottomMargin = 20;
-        int rectCount = 4;
+        int rectCount = gClientCount; // 参加人数分だけ描画
         int spacing = 10;
         int availableHeight = (helpTextY - bottomMargin) - (titleBottomY + topMargin);
         int rectH = (availableHeight - spacing*(rectCount-1)) / rectCount;
@@ -370,20 +409,30 @@ void DrawImageAndText(void){
         }
         // ラベル & 名前
         const char* rankLabels[4] = {"1st:","2nd:","3rd:","4th:"};
-        for(int i=0;i<rectCount;i++){
+        for(int i=0; i<rectCount; i++){
             int rectY = titleBottomY + topMargin + i*(rectH + spacing);
+            
+            // 順位付けされたプレイヤーの元のクライアントIDを取得
+            int clientID = rankedIDs[i];
+            
             int textW=0,textH=0;
             TTF_SizeUTF8(gFontRank, rankLabels[i], &textW, &textH);
             int labelX = startX + 15;
             int labelY = rectY + (rectH - textH)/2;
             DrawText_Internal(rankLabels[i], labelX, labelY, 0,0,255,gFontRank);
 
-            const char* nameToDraw = (i < gClientCount) ? gAllClientNames[i] : "";
+            // ★ 修正: 順位に基づいて名前とHPを描画 ★
+            const char* name = gAllClientNames[clientID];
+            int hp = gPlayerHP[clientID];
+            
+            char nameAndHP[MAX_NAME_SIZE + 10]; 
+            sprintf(nameAndHP, "%s (HP: %d)", name, hp); // 名前とHPを表示
+            
             int nameW=0,nameH=0;
-            TTF_SizeUTF8(gFontName,nameToDraw,&nameW,&nameH);
+            TTF_SizeUTF8(gFontName,nameAndHP,&nameW,&nameH);
             int nameX = labelX + textW + 20;
             int nameY = rectY + (rectH - nameH)/2;
-            DrawText_Internal(nameToDraw,nameX,nameY,0,0,255,gFontName);
+            DrawText_Internal(nameAndHP, nameX, nameY, 0,0,255,gFontName);
         }
     }
     SDL_RenderPresent(gMainRenderer);
@@ -665,7 +714,6 @@ void SetScreenState(int state){
     }
 }
 
-// プレイヤーの座標を更新するヘルパー関数（境界チェックなし）
 // プレイヤーの座標を更新するヘルパー関数（境界チェックを追加）
 void UpdatePlayerPos(int clientID, char direction)
 {

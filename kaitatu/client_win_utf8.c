@@ -167,8 +167,18 @@ void DrawImageAndText(void){
         { SDL_SetRenderDrawColor(gMainRenderer,0,100,0,255); SDL_RenderFillRect(gMainRenderer,NULL); 
         }
         int textW=0;
+        int titleY = 20; // ★ 修正: titleY の宣言と初期化を追加 ★
         if (gFontLarge) TTF_SizeUTF8(gFontLarge,"Tetra Conflict",&textW,NULL);
         DrawText_Internal("Tetra Conflict",(w-textW)/2,20,255,255,255,gFontLarge);
+
+        const char* promptMsg = "Xキーを押してください";
+        int promptW=0;
+        int promptY = titleY + 60; // タイトルから下に約60px離して配置
+        
+        if (gFontName) TTF_SizeUTF8(gFontName, promptMsg, &promptW, NULL); 
+        
+        DrawText_Internal(promptMsg, (w-promptW)/2, promptY, 255, 200, 0, gFontName); // 黄色系の文字で描画
+
         // 参加者見出し
         DrawText_Internal("参加者:", (w/2)-100, h/2, 255,255,255, gFontName);
         int baseY = h/2 + 40;

@@ -84,7 +84,7 @@ void InitProjectiles(void)
 // 弾の更新と描画を行う関数
 void UpdateAndDrawProjectiles(void)
 {
-    const int SQ_SIZE = 5; // 弾のサイズ (非常に小さい円)
+    const int SQ_SIZE = 25; // 弾のサイズ (非常に小さい円)
 
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         if (gProjectiles[i].active) {

@@ -23,6 +23,7 @@
 #define UPDATE_MOVE_COMMAND 'D' /* サーバーが全クライアントへ移動情報を配信 */
 #define FIRE_COMMAND            'F'   /* クライアントが発砲要求をサーバーへ通知 */
 #define UPDATE_PROJECTILE_COMMAND 'P' /* サーバーが全クライアントへ発射体情報を配信 */
+#define APPLY_DAMAGE_COMMAND    'A'
 
 // 発射体関連の定数
 #define MAX_PROJECTILES_PER_CLIENT 5

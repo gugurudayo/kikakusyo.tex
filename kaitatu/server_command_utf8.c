@@ -12,6 +12,10 @@
 #define PROJECTILE_SIZE 5
 #define PLAYER_SIZE 50
 #define SERVER_PROJECTILE_STEP 20
+// ★ 定数定義を追加
+#define MAX_WEAPONS 4
+#define MAX_STATS_PER_WEAPON 6
+#define STAT_DAMAGE 2 
 
 
 typedef struct {
@@ -33,6 +37,21 @@ static ServerProjectile gServerProjectiles[MAX_PROJECTILES]; // サーバーが�
 
 static void SetIntData2DataBlock(void *data,int intData,int *dataSize);
 static void SetCharData2DataBlock(void *data,char charData,int *dataSize);
+
+// ★ 追記: サーバー側で武器情報を保持するための配列
+static int gClientWeaponID[MAX_CLIENTS]; 
+static int gServerInitialized = 0; // 初期化フラグ
+
+int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
+    // 武器 0: 高速アタッカー (ダメージ10)
+    { 500, 1000, 10, 100, 3, 20 },
+    // 武器 1: ヘビーシューター (ダメージ30)
+    { 1500, 1500, 30, 120, 1, 5 },
+    // 武器 2: バランス型 (ダメージ20)
+    { 1000, 1200, 20, 110, 2, 10 },
+    // 武器 3: タフネス機 (ダメージ15)
+    { 800, 800, 15, 150, 4, 15 }
+};
 
 int gPlayerPosX[MAX_CLIENTS] = {0}; 
 int gPlayerPosY[MAX_CLIENTS] = {0};
@@ -62,6 +81,7 @@ static int CheckCollision(ServerProjectile *bullet, int playerID) {
             by < py + ph &&
             by + bh > py);
 }
+
 // サーバー側で全ての弾を動かし、衝突判定を行うタイマーコールバック
 static Uint32 ServerGameLoop(Uint32 interval, void *param) 
 {
@@ -69,6 +89,19 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param)
     
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         if (gServerProjectiles[i].active) {
+            
+            int shooterID = gServerProjectiles[i].firedByClientID;
+            int weaponID = gClientWeaponID[shooterID];
+            int attackDamage = 0;
+            
+            // ★ 修正: 武器IDが有効な場合にのみ攻撃力を取得
+            if (weaponID >= 0 && weaponID < MAX_WEAPONS) {
+                attackDamage = gServerWeaponStats[weaponID][STAT_DAMAGE];
+            } else {
+                // 武器未選択時のフォールバック (ここでは最も弱いダメージ10とする)
+                attackDamage = 10; 
+            }
+
             // 弾を移動させる
             gServerProjectiles[i].y -= SERVER_PROJECTILE_STEP;
 
@@ -85,14 +118,24 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param)
 
                 if (CheckCollision(&gServerProjectiles[i], j)) {
                     // 衝突発生！ターミナルに表示
-                    printf(">> HIT! Player %d (%s) was hit by Player %d (%s)\n",
+                    printf(">> HIT! Player %d (%s) was hit by Player %d (%s). Damage: %d\n",
                            j, gClients[j].name,
-                           gServerProjectiles[i].firedByClientID, gClients[gServerProjectiles[i].firedByClientID].name);
+                           gServerProjectiles[i].firedByClientID, gClients[gServerProjectiles[i].firedByClientID].name,
+                           attackDamage); // ダメージ値も出力
+                           
                     // 弾を非アクティブにする
                     gServerProjectiles[i].active = 0;
                     gActiveProjectileCount--;
                     
-                    // TODO: クライアントに衝突情報を通知するコマンド送信ロジックをここに追加
+                    // ★ 追記: クライアントに衝突情報を通知するコマンド送信ロジック
+                    unsigned char data[MAX_DATA];
+                    int dataSize = 0;
+                    SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &dataSize);
+                    SetIntData2DataBlock(data, j, &dataSize);           // 被弾したクライアントID (j)
+                    SetIntData2DataBlock(data, attackDamage, &dataSize); // 武器攻撃力を使用
+                    
+                    SendData(ALL_CLIENTS, data, dataSize);
+
                     break; 
                 }
             }
@@ -119,8 +162,18 @@ static Uint32 SendCommandAfterDelay(Uint32 interval, void *param)
     printf("[SERVER] Sent command 0x%02X after 3 seconds delay\n", p->cmd);
     return 0; // 一度だけ
 }
+
 int ExecuteCommand(char command,int pos)
 {
+    // ★ 追記: サーバー起動時の一回のみ初期化処理を実行
+    if (gServerInitialized == 0) {
+        // 全要素を -1 で初期化
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            gClientWeaponID[i] = -1;
+        }
+        gServerInitialized = 1;
+    }
+
     unsigned char data[MAX_DATA];
     int dataSize;
     int endFlag = 1;
@@ -169,6 +222,7 @@ int ExecuteCommand(char command,int pos)
 
             if (gClientHands[senderID] == 0) {
                 gClientHands[senderID] = (char)(selectedWeaponID + 1);
+                gClientWeaponID[senderID] = selectedWeaponID; // ★ 武器IDを記録 ★
                 gHandsCount++;
             }
             // 全員選択で 3秒後に NEXT_SCREEN_COMMAND を送信

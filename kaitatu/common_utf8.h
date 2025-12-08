@@ -28,7 +28,7 @@
 // 発射体関連の定数
 #define MAX_PROJECTILES_PER_CLIENT 5
 #define MAX_PROJECTILES (MAX_PROJECTILES_PER_CLIENT * MAX_CLIENTS)
-#define PROJECTILE_STEP 20 // 発射体の移動速度
+#define PROJECTILE_STEP 1 // 発射体の移動速度
 
 #define MAX_WEAPONS 4 // 武器の数
 #define MAX_STATS_PER_WEAPON 6 // 1つの武器に紐づくステータスの数 (CT, 飛距離, 威力, 体力, 連射数, 移動速度)

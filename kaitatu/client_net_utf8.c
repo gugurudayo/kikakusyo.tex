@@ -14,62 +14,6 @@ static void GetAllName(int *clientID,int *num,char clientNames[][MAX_NAME_SIZE])
 static void SetMask(void);
 static int RecvData(void *data,int dataSize);
 
-/* 不適切な名前かどうかを判定する */
-static int IsBadName(const char *name)
-{
-    /* NGワード一覧（必要に応じて追加） */
-    const char *ngWords[] = {
-    "fuck", "fucking", "fucker", "fuk",
-    "sex", "sexy",
-    "porn", "porno",
-    "dick", "cock",
-    "pussy",
-    "asshole", "ass",
-    "cum",
-
-    /* 差別・暴言 */
-    "bitch",
-    "shit",
-    "damn",
-    "bastard",
-
-    /* よくある回避表記 */
-    "f*ck", "f**k",
-    "d1ck", "c0ck",
-
-    /* 下ネタ */
-    "ちんこ", "チンコ",
-    "まんこ", "マンコ",
-    "おっぱい",
-    "ちんちん",
-    "きんたま",
-
-    /* 卑語・暴言 */
-    "くそ", "クソ",
-    "ばか", "バカ",
-    "あほ", "アホ",
-
-    "tinko", "chinko", "chinpo",
-    "manko",
-    "oppai",
-    "kintama",
-
-    "kus", "kuso",
-    "baka", "aho",
-
-        NULL
-    };
-
-    int i;
-    for (i = 0; ngWords[i] != NULL; i++) {
-        if (strstr(name, ngWords[i]) != NULL) {
-            return 1;   /* 不適切 */
-        }
-    }
-    return 0;           /* 問題なし */
-}
-
-
 int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAME_SIZE])
 {
     struct hostent	*servHost;
@@ -102,31 +46,15 @@ int SetUpClient(char *hostName,int *clientID,int *num,char clientNames[][MAX_NAM
     }
     fprintf(stderr,"connected\n");
 
-do{
-    printf("Enter Your Name\n");
-    fgets(str, BUF_SIZE, stdin);
-
-    len = strlen(str) - 1;
-    str[len] = '\0';
-
-    /* 長さチェック */
-    if (len > MAX_NAME_SIZE - 1 || len == 0) {
-        printf("Name length is invalid. Try again.\n");
-        continue;
-    }
-
-    /* 不適切語チェック */
-    if (IsBadName(str)) {
-        printf("Inappropriate word detected. Please enter another name.\n");
-        continue;
-    }
-
-    break;  /* 正常な名前なのでループ終了 */
-
-} while (1);
-
+    /* 名前を読み込みサーバーに送る */
+    do{
+		printf("名前を入力してください\n");
+		fgets(str,BUF_SIZE,stdin);
+		len = strlen(str)-1;
+		str[len]='\0';
+    }while(len>MAX_NAME_SIZE-1 || len==0);
     SendData(str,MAX_NAME_SIZE);
-    printf("Please Wait\n");
+    printf("少々お待ちください\n");
 
     /* 全クライアントのユーザー名を得る */
     GetAllName(clientID,num,clientNames);     

@@ -9,8 +9,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h> 
-#include <stdlib.h> // qsortを使用するために必要
-
+#include <stdlib.h> 
 #define BACKGROUND_IMAGE "22823124.jpg" 
 #define RESULT_IMAGE "Chatgpt.png"     
 #define RESULT_BACK_IMAGE "2535410.jpg" 
@@ -26,7 +25,10 @@
 #define SCREEN_STATE_RESULT 2
 #define SCREEN_STATE_TITLE 3
 
-// ★ 追加した体力バー描画用の定数 ★
+#define MODE_MOVE 0
+#define MODE_FIRE 1
+
+
 #define HP_BAR_HEIGHT 5 // HPバーの高さ
 #define HP_BAR_WIDTH 50 // HPバーの幅 (プレイヤーサイズと同じ)
 #define MAX_HP 150      // 最大体力 (タフネス機のHP:150に合わせる)
@@ -51,7 +53,7 @@ int gMyClientID = -1;
 static int gXPressedFlags[MAX_CLIENTS] = {0};
 static int gCurrentScreenState = SCREEN_STATE_LOBBY_WAIT;
 static int gWeaponSent = 0;
-
+static int gControlMode = MODE_MOVE; 
 static int gPlayerPosX[MAX_CLIENTS];
 static int gPlayerPosY[MAX_CLIENTS];
 
@@ -88,21 +90,38 @@ void InitProjectiles(void)
     memset(gProjectiles, 0, sizeof(gProjectiles));
 }
 
-// 弾の更新と描画を行う関数
+// 弾の更新と描画を行う関数 (★修正: 方向に応じた移動★)
 void UpdateAndDrawProjectiles(void)
 {
-    const int SQ_SIZE = 5; // 弾のサイズ (非常に小さい円)
+    const int SQ_SIZE = 25; // 弾のサイズ (非常に小さい円)
 
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         if (gProjectiles[i].active) {
-            // 1. 位置の更新（上方向への移動）
-            gProjectiles[i].y -= PROJECTILE_STEP;
+            
+            // 1. 位置の更新（方向に応じた移動）
+            char dir = gProjectiles[i].direction;
+            int step = PROJECTILE_STEP;
 
-            // 2. 画面外チェック
-            if (gProjectiles[i].y < 0) {
+            if (dir == DIR_UP) {
+                gProjectiles[i].y -= step;
+            } else if (dir == DIR_DOWN) {
+                gProjectiles[i].y += step;
+            } else if (dir == DIR_LEFT) {
+                gProjectiles[i].x -= step;
+            } else if (dir == DIR_RIGHT) {
+                gProjectiles[i].x += step;
+            }
+
+            // 2. 画面外チェック (X座標のチェックも追加)
+            int windowW, windowH;
+            SDL_GetWindowSize(gMainWindow, &windowW, &windowH);
+
+            if (gProjectiles[i].y < -SQ_SIZE || gProjectiles[i].y > windowH || 
+                gProjectiles[i].x < -SQ_SIZE || gProjectiles[i].x > windowW) {
                 gProjectiles[i].active = 0; // 画面外に出たら無効化
                 continue;
             }
+
             // 3. 描画
             SDL_Rect bulletRect = { 
                 gProjectiles[i].x, 
@@ -117,8 +136,8 @@ void UpdateAndDrawProjectiles(void)
     }
 }
 
-// 発射コマンドをサーバーに送信する関数
-void SendFireCommand(void)
+// 発射コマンドをサーバーに送信する関数 (★修正: direction 引数を追加★)
+void SendFireCommand(char direction)
 {
     // サーバーに FIRE_COMMAND を送信
     unsigned char data[MAX_DATA];
@@ -129,6 +148,9 @@ void SendFireCommand(void)
     // プレイヤーの正方形(50px)の中央付近(20pxオフセット)を送信
     SetIntData2DataBlock(data, gPlayerPosX[gMyClientID] + 20, &dataSize); 
     SetIntData2DataBlock(data, gPlayerPosY[gMyClientID], &dataSize);
+    // ★ 追記: 発射方向を送信 ★
+    SetCharData2DataBlock(data, direction, &dataSize);
+    
     SendData(data, dataSize);
 }
 // SetScreenState は下部で定義されているため、ここで宣言が必要
@@ -312,6 +334,15 @@ void DrawImageAndText(void){
         if (gResultTexture) SDL_RenderCopy(gMainRenderer,gResultTexture,NULL,NULL);
         else { SDL_SetRenderDrawColor(gMainRenderer,153,204,0,255); SDL_RenderFillRect(gMainRenderer,NULL); }
         
+        // ★ 追記: 操作モードの表示 ★
+        char modeMsg[64];
+        if (gControlMode == MODE_MOVE) {
+            sprintf(modeMsg, "MODE: 移動 (Cキーで発射モードへ)");
+        } else {
+            sprintf(modeMsg, "MODE: 発射 (Cキーで移動モードへ)");
+        }
+        DrawText_Internal(modeMsg, 10, 10, 255, 255, 0, gFontNormal);
+
         // プレイヤー正方形の描画ブロック
         const int SQ_SIZE = 50; 
         
@@ -330,7 +361,7 @@ void DrawImageAndText(void){
             if (i == 0) { r=255; g=0; b=0; } // 1人目: 赤
             else if (i == 1) { r=0; g=0; b=255; } // 2人目: 青
             else if (i == 2) { r=255; g=255; b=0; } // 3人目: 黄
-            else if (i == 3) { r=0; g=255; b=0; } // 4人目: 緑
+            else if (i == 3) { r=0; g=255; g=0; } // 4人目: 緑
 
             SDL_SetRenderDrawColor(gMainRenderer, r, g, b, 255);
             SDL_RenderFillRect(gMainRenderer, &playerRect);
@@ -568,7 +599,7 @@ void DestroyWindow(void){
     IMG_Quit(); TTF_Quit(); SDL_Quit();
 }
 
-/* WindowEvent: 入力処理 */
+/* WindowEvent: 入力処理 (★修正: Cキーによるモード切替、発射モード処理を追加★) */
 void WindowEvent(int num){
     SDL_Event event;
     if (SDL_PollEvent(&event)){
@@ -599,38 +630,57 @@ void WindowEvent(int num){
                 }
 
                 if (gCurrentScreenState == SCREEN_STATE_RESULT) {
-                    if (event.key.keysym.sym == SDLK_SPACE) {
-                        // スペースキーが押されたら発射コマンドを送信
-                        SendFireCommand();
-                        // ★ DrawImageAndText() の呼び出しは削除 ★
+                    
+                    // ★ 追記: Cキーでモードを切り替え ★
+                    if (event.key.keysym.sym == SDLK_c) {
+                        gControlMode = (gControlMode == MODE_MOVE) ? MODE_FIRE : MODE_MOVE;
+                        DrawImageAndText(); // モード表示を更新
+                        break;
                     }
-                    char direction = 0;
-                    switch (event.key.keysym.sym) {
-                        case SDLK_UP:
-                            direction = DIR_UP;
-                            break;
-                        case SDLK_DOWN:
-                            direction = DIR_DOWN;
-                            break;
-                        case SDLK_LEFT:
-                            direction = DIR_LEFT;
-                            break;
-                        case SDLK_RIGHT:
-                            direction = DIR_RIGHT;
-                            break;
+                    
+                    // --- 移動モードの処理 (gControlMode == MODE_MOVE) ---
+                    if (gControlMode == MODE_MOVE) {
+                        char direction = 0;
+                        switch (event.key.keysym.sym) {
+                            case SDLK_UP: direction = DIR_UP; break;
+                            case SDLK_DOWN: direction = DIR_DOWN; break;
+                            case SDLK_LEFT: direction = DIR_LEFT; break;
+                            case SDLK_RIGHT: direction = DIR_RIGHT; break;
+                        }
+
+                        if (direction != 0) {
+                            // サーバーに移動コマンドと方向を送信
+                            unsigned char data[MAX_DATA];
+                            int dataSize = 0;
+                            SetCharData2DataBlock(data, MOVE_COMMAND, &dataSize);
+                            SetCharData2DataBlock(data, direction, &dataSize);
+                            SendData(data, dataSize);
+                        }
                     }
-
-                    if (direction != 0) {
-                        // サーバーに移動コマンドと方向を送信
-                        unsigned char data[MAX_DATA];
-                        int dataSize = 0;
-                        SetCharData2DataBlock(data, MOVE_COMMAND, &dataSize);
-                        SetCharData2DataBlock(data, direction, &dataSize);
-                        SendData(data, dataSize);
-
-                        // 自分の座標を即座に更新し、描画を更新（レスポンスを良くするため）
-                        //UpdatePlayerPos(gMyClientID, direction); 
-                        //DrawImageAndText();
+                    
+                    // --- 発射モードの処理 (gControlMode == MODE_FIRE) ---
+                    else if (gControlMode == MODE_FIRE) {
+                        
+                        if (event.key.keysym.sym == SDLK_SPACE) {
+                            const Uint8 *state = SDL_GetKeyboardState(NULL);
+                            char fireDirection = 0;
+                            
+                            // 押された方向キーを検出
+                            if (state[SDL_SCANCODE_UP]) {
+                                fireDirection = DIR_UP;
+                            } else if (state[SDL_SCANCODE_DOWN]) {
+                                fireDirection = DIR_DOWN;
+                            } else if (state[SDL_SCANCODE_LEFT]) {
+                                fireDirection = DIR_LEFT;
+                            } else if (state[SDL_SCANCODE_RIGHT]) {
+                                fireDirection = DIR_RIGHT;
+                            }
+                            
+                            if (fireDirection != 0) {
+                                // 方向が指定されていれば発射コマンドを送信
+                                SendFireCommand(fireDirection);
+                            }
+                        }
                     }
                 }
                 break;

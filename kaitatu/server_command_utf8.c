@@ -23,6 +23,7 @@ typedef struct {
     int y;
     int firedByClientID; // 発射元
     int active;
+    char direction; // ★ 追記: 発射方向を保持 ★
 } ServerProjectile;
 // ★★★ サーバー側ゲーム状態管理構造体 ここまで ★★★
 
@@ -82,7 +83,7 @@ static int CheckCollision(ServerProjectile *bullet, int playerID) {
             by + bh > py);
 }
 
-// サーバー側で全ての弾を動かし、衝突判定を行うタイマーコールバック
+// サーバー側で全ての弾を動かし、衝突判定を行うタイマーコールバック (★修正: 方向に応じた移動★)
 static Uint32 ServerGameLoop(Uint32 interval, void *param) 
 {
     int numClients = GetClientNum();
@@ -102,15 +103,29 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param)
                 attackDamage = 10; 
             }
 
-            // 弾を移動させる
-            gServerProjectiles[i].y -= SERVER_PROJECTILE_STEP;
+            // 弾を移動させる (★修正: directionに基づく移動★)
+            char dir = gServerProjectiles[i].direction;
+            
+            if (dir == DIR_UP) {
+                gServerProjectiles[i].y -= SERVER_PROJECTILE_STEP;
+            } else if (dir == DIR_DOWN) {
+                gServerProjectiles[i].y += SERVER_PROJECTILE_STEP;
+            } else if (dir == DIR_LEFT) {
+                gServerProjectiles[i].x -= SERVER_PROJECTILE_STEP;
+            } else if (dir == DIR_RIGHT) {
+                gServerProjectiles[i].x += SERVER_PROJECTILE_STEP;
+            }
 
-            // 画面外チェック (ここでは簡易的にy<0)
-            if (gServerProjectiles[i].y < 0) {
+            // 画面外チェック (ここでは簡易的にy<0, x<0, x>width, y>height)
+            // サーバーは画面サイズを知らないため、ここでは広めに設定するか、クライアントに依存しない境界値を使用
+            // ここでは y < -100 や y > 1500 など、妥当な範囲外を検出する
+            if (gServerProjectiles[i].y < -100 || gServerProjectiles[i].y > 1500 ||
+                gServerProjectiles[i].x < -100 || gServerProjectiles[i].x > 1500) {
                 gServerProjectiles[i].active = 0;
                 gActiveProjectileCount--;
                 continue;
             }
+
             // 衝突判定
             for (int j = 0; j < numClients; j++) {
                 // 発射元と自分自身は判定しない
@@ -260,11 +275,13 @@ int ExecuteCommand(char command,int pos)
         case FIRE_COMMAND: 
         {
             int clientID, x, y;
+            char direction; // ★ 追記: 発射方向データ用 ★
             
             // 1. クライアントから送信された発射体情報を読み取り
             RecvIntData(pos, &clientID); // 発射元ID
             RecvIntData(pos, &x);        // 初期X座標
             RecvIntData(pos, &y);        // 初期Y座標
+            RecvCharData(pos, &direction); // ★ 追記: 発射方向を読み取る ★
             
             // サーバー側での弾の管理（リストに追加）
             for (int i = 0; i < MAX_PROJECTILES; i++) {
@@ -273,6 +290,7 @@ int ExecuteCommand(char command,int pos)
                     gServerProjectiles[i].firedByClientID = clientID;
                     gServerProjectiles[i].x = x;
                     gServerProjectiles[i].y = y;
+                    gServerProjectiles[i].direction = direction; // ★ 追記: 方向を格納 ★
                     gActiveProjectileCount++;
                     break;
                 }
@@ -296,6 +314,7 @@ int ExecuteCommand(char command,int pos)
             SetIntData2DataBlock(data, clientID, &dataSize);                   // 発射元ID
             SetIntData2DataBlock(data, x, &dataSize);                          // 初期X座標
             SetIntData2DataBlock(data, y, &dataSize);                          // 初期Y座標
+            SetCharData2DataBlock(data, direction, &dataSize);                 // ★ 追記: 発射方向を格納 ★
             
             SendData(ALL_CLIENTS, data, dataSize);
             

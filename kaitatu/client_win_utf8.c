@@ -59,6 +59,9 @@ static int gPlayerPosY[MAX_CLIENTS];
 
 static int gPlayerMoveStep[MAX_CLIENTS]; 
 
+//12/15　西脇　追記
+static int gSelectedWeaponID = -1; // -1 = 未選択
+
 Projectile gProjectiles[MAX_PROJECTILES];
 
 int gPlayerHP[MAX_CLIENTS]; 
@@ -265,17 +268,29 @@ void DrawImageAndText(void){
         int rightX=leftX+rectW+P;
         int topY=(h-(rectH*2+P))/2 + Y_OFF;
         int bottomY=topY+rectH+P;
+
+        int mx, my;
+SDL_GetMouseState(&mx, &my);
         
         for (int i = 0; i < MAX_WEAPONS; i++) {
             SDL_Rect r;
-            Uint8 rColor=0, gColor=0, bColor=0;
 
             // 座標と色を設定
-            if (i == 0) { r.x=leftX; r.y=topY; rColor=255; } // 左上 (赤)
-            else if (i == 1) { r.x=rightX; r.y=topY; bColor=255; } // 右上 (青)
-            else if (i == 2) { r.x=leftX; r.y=bottomY; rColor=255; gColor=255; } // 左下 (黄)
-            else if (i == 3) { r.x=rightX; r.y=bottomY; gColor=255; } // 右下 (緑)
+                if (i == 0) { r.x = leftX;  r.y = topY; }
+    else if (i == 1) { r.x = rightX; r.y = topY; }
+    else if (i == 2) { r.x = leftX;  r.y = bottomY; }
+    else if (i == 3) { r.x = rightX; r.y = bottomY; }
+
             r.w=rectW; r.h=rectH;
+
+            Uint8 baseR = 180, baseG = 190, baseB = 200;
+    Uint8 hoverR = 140, hoverG = 150, hoverB = 160;
+
+    int isHover = (mx >= r.x && mx < r.x + r.w &&
+                   my >= r.y && my < r.y + r.h);
+
+    Uint8 rColor = baseR, gColor = baseG, bColor = baseB;
+    if (isHover || gSelectedWeaponID == i) { rColor = hoverR; gColor = hoverG; bColor = hoverB; }
             // 長方形の描画
             SDL_SetRenderDrawColor(gMainRenderer, rColor, gColor, bColor, 255); 
             SDL_RenderFillRect(gMainRenderer,&r);
@@ -684,6 +699,8 @@ void WindowEvent(int num){
                         else if (y >= bottomY && y < bottomY + rectH) selectedID = 3; // 右下
                     }
                     if (selectedID != -1 && gWeaponSent == 0){
+                        gSelectedWeaponID = selectedID;
+                        DrawImageAndText(); // ★ クリック直後に見た目更新
                         unsigned char data[MAX_DATA];
                         int dataSize = 0;
                         SetCharData2DataBlock(data, SELECT_WEAPON_COMMAND, &dataSize);
@@ -724,6 +741,7 @@ void SetScreenState(int state){
     if (state == SCREEN_STATE_GAME_SCREEN) {
         // ゲーム画面への遷移時、武器選択フラグをリセット
         gWeaponSent = 0;
+        gSelectedWeaponID = -1;
     } else if (state == SCREEN_STATE_LOBBY_WAIT) {
         // ロビー待機画面への遷移時、全員のX押下状態をリセット
         memset(gXPressedFlags, 0, sizeof(gXPressedFlags));

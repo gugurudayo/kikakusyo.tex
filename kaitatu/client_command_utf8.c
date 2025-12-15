@@ -37,7 +37,6 @@ int ExecuteCommand(char command)
             RecvIntData(&selectedWeaponID);
             
             int newStep = 0;
-            // 武器IDに基づいて移動速度を設定
             switch (selectedWeaponID) {
                 case 0: 
                 case 1: 
@@ -50,10 +49,8 @@ int ExecuteCommand(char command)
                     break;
             }
             SetPlayerMoveStep(gMyClientID, newStep);
-            extern int gWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON]; 
-            
-            // ★ 選択した武器のHPを自分の体力に設定 ★
-            gPlayerHP[gMyClientID] = gWeaponStats[selectedWeaponID][STAT_HP];
+            extern int gWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON]; // 武器ステータス配列の外部宣言
+            //gPlayerHP[gMyClientID] = gWeaponStats[selectedWeaponID][STAT_HP]; // ★ 削除済み ★
             break;
         }
         case NEXT_SCREEN_COMMAND:
@@ -69,62 +66,48 @@ int ExecuteCommand(char command)
             RecvIntData(&clientID);
             RecvCharData(&direction); 
             UpdatePlayerPos(clientID, direction);
-            DrawImageAndText(); // 描画更新
+            DrawImageAndText(); 
             break;
         }
         
         case UPDATE_PROJECTILE_COMMAND: 
         {
             int clientID, x, y; 
-            char direction; // ★ 追記: 方向データ用 ★
-
-            // 1. サーバーから送られた弾の情報を読み取り
+            char direction; 
             RecvIntData(&clientID); // 発射元ID
             RecvIntData(&x);        // 初期X座標
             RecvIntData(&y);        // 初期Y座標
-            RecvCharData(&direction); // ★ 追記: 発射方向を読み取る ★
+            RecvCharData(&direction); 
 
             for (int i = 0; i < MAX_PROJECTILES; i++) {
                 if (!gProjectiles[i].active) {
                     gProjectiles[i].active = 1;
                     gProjectiles[i].clientID = clientID;
-                    // クライアント側でローカル発射処理時にプレイヤー位置+20(中央)で登録したため、
-                    // サーバーからの情報もそのまま受け入れます。
                     gProjectiles[i].x = x; 
                     gProjectiles[i].y = y;
-                    gProjectiles[i].direction = direction; // ★ 追記: 方向を格納 ★
+                    gProjectiles[i].direction = direction; 
                     break;
                 }
             }
-            DrawImageAndText(); // 新しい弾の描画を開始するため画面更新
+            DrawImageAndText(); 
             break;
         }
 
-        case APPLY_DAMAGE_COMMAND: // ★ 追加: ダメージ適用コマンド
+        case APPLY_DAMAGE_COMMAND: 
         {
             int targetClientID;
             int damageAmount;
-            
-            // サーバーから送られた「誰に」「どれだけ」の情報を読み取り
             RecvIntData(&targetClientID);
             RecvIntData(&damageAmount);
-
-            // ★ 修正: ターゲットIDのHPを更新する（全クライアントで同期）★
             if (targetClientID >= 0 && targetClientID < MAX_CLIENTS) {
-                
-                // ターゲットのHPを減算
                 gPlayerHP[targetClientID] -= damageAmount;
-                
-                // HPが負の値にならないようにクランプ
                 if (gPlayerHP[targetClientID] < 0) {
                     gPlayerHP[targetClientID] = 0;
                 }
             }
-            
             DrawImageAndText(); // HPバー更新のため再描画
             break;
-        }
-        
+        }        
         default:
             break;
     }
@@ -168,5 +151,5 @@ static void RecvResultData(void)
 /* SetMyClientID: 自分のID設定（ここでは未使用）*/
 void SetMyClientID(int clientID)
 {
-    // gMyClientID の定義は client_win_utf8.c に集約されているため、ここでは何もしません
+    // ... (省略) ...
 }

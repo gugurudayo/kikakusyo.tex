@@ -76,10 +76,13 @@ int ExecuteCommand(char command)
         case UPDATE_PROJECTILE_COMMAND: 
         {
             int clientID, x, y; 
+            char direction; // ★ 追記: 方向データ用 ★
+
             // 1. サーバーから送られた弾の情報を読み取り
             RecvIntData(&clientID); // 発射元ID
             RecvIntData(&x);        // 初期X座標
             RecvIntData(&y);        // 初期Y座標
+            RecvCharData(&direction); // ★ 追記: 発射方向を読み取る ★
 
             for (int i = 0; i < MAX_PROJECTILES; i++) {
                 if (!gProjectiles[i].active) {
@@ -89,6 +92,7 @@ int ExecuteCommand(char command)
                     // サーバーからの情報もそのまま受け入れます。
                     gProjectiles[i].x = x; 
                     gProjectiles[i].y = y;
+                    gProjectiles[i].direction = direction; // ★ 追記: 方向を格納 ★
                     break;
                 }
             }

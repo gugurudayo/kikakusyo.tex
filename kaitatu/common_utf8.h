@@ -25,24 +25,19 @@
 #define UPDATE_PROJECTILE_COMMAND 'P' /* サーバーが全クライアントへ発射体情報を配信 */
 #define APPLY_DAMAGE_COMMAND    'A'
 
-// 発射体関連の定数
 #define MAX_PROJECTILES_PER_CLIENT 5
 #define MAX_PROJECTILES (MAX_PROJECTILES_PER_CLIENT * MAX_CLIENTS)
-#define PROJECTILE_STEP 1 // 発射体の移動速度
+#define PROJECTILE_STEP 1 
 
-#define MAX_WEAPONS 4 // 武器の数
+#define MAX_WEAPONS 4 
 #define MAX_STATS_PER_WEAPON 6 // 1つの武器に紐づくステータスの数 (CT, 飛距離, 威力, 体力, 連射数, 移動速度)
-#define MAX_STAT_NAME_SIZE 32 // ステータス名の最大文字数
-
-// 武器ステータスIDの定義 (配列アクセス用)
+#define MAX_STAT_NAME_SIZE 32 
 #define STAT_CT_TIME 0
 #define STAT_RANGE 1
 #define STAT_DAMAGE 2
 #define STAT_HP 3
 #define STAT_RATE 4
 #define STAT_SPEED 5
-
-// 移動方向の定義
 #define DIR_UP    'U'
 #define DIR_DOWN  'D'
 #define DIR_LEFT  'L'

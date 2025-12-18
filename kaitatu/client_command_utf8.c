@@ -11,6 +11,19 @@ void SetCharData2DataBlock(void *data,char charData,int *dataSize);
 static void RecvResultData(void);
 void SetXPressedFlag(int clientID);
 
+// ★ 追加: Xコマンドと現在の画面状態を送信する関数 ★
+void SendXCommandWithState(int clientID, int screenState)
+{
+    unsigned char data[MAX_DATA];
+    int dataSize = 0;
+    
+    SetCharData2DataBlock(data, X_COMMAND, &dataSize);
+    SetIntData2DataBlock(data, clientID, &dataSize);
+    SetIntData2DataBlock(data, screenState, &dataSize); // 画面状態を送信
+
+    SendData(data, dataSize);
+}
+
 /* ExecuteCommand: サーバーからのコマンド処理 */
 int ExecuteCommand(char command)
 {
@@ -18,6 +31,7 @@ int ExecuteCommand(char command)
     switch(command){
         case END_COMMAND:
             endFlag = 0;
+            printf("Received END_COMMAND. Shutting down.\n"); // ★ 追加 ★
             break;
         case UPDATE_X_COMMAND:
         {
@@ -49,8 +63,7 @@ int ExecuteCommand(char command)
                     break;
             }
             SetPlayerMoveStep(gMyClientID, newStep);
-            extern int gWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON]; // 武器ステータス配列の外部宣言
-            //gPlayerHP[gMyClientID] = gWeaponStats[selectedWeaponID][STAT_HP]; // ★ 削除済み ★
+            extern int gWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON]; 
             break;
         }
         case NEXT_SCREEN_COMMAND:

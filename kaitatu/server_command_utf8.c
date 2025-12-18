@@ -1,4 +1,4 @@
-/*server_command_utf8.c*/
+/* server_command_utf8.c */
 
 #include "server_common_utf8.h"
 #include "server_func_utf8.h"
@@ -16,195 +16,190 @@
 #define MAX_STATS_PER_WEAPON 6
 #define STAT_DAMAGE 2 
 
-// ★ 追加: クライアント側のInitWindowsロジックに基づく定数を定義
 #define DEFAULT_WINDOW_WIDTH 1300
 #define DEFAULT_WINDOW_HEIGHT 1000
 const int PADDING = 50; 
-// ★ ここまで追加 ★
 
-// 画面状態の定数
 #define SCREEN_STATE_LOBBY_WAIT 0
 #define SCREEN_STATE_GAME_SCREEN 1
 #define SCREEN_STATE_RESULT 2
 #define SCREEN_STATE_TITLE 3
 
-
 typedef struct {
     int x;
     int y;
-    int firedByClientID; 
+    int firedByClientID;
     int active;
     char direction; 
 } ServerProjectile;
 
+typedef struct {
+    unsigned char cmd;
+} TimerParam;
 
-/* 状態 */
-static char gClientHands[MAX_CLIENTS] = {0};          // 0: 未選択, 1..: 選択済み(weaponID+1)
+/* グローバル状態 */
+static int gServerPlayerHP[MAX_CLIENTS]; 
+static int gBattleEndSent = 0;           
+static char gClientHands[MAX_CLIENTS] = {0};
 static int gHandsCount = 0;
-static int gXPressedClientFlags[MAX_CLIENTS] = {0};   // X押下フラグ（サーバー側保持）
+static int gXPressedClientFlags[MAX_CLIENTS] = {0};
 static int gXPressedCount = 0;
-
-static int gActiveProjectileCount = 0; // 現在アクティブな発射体の総数
-static ServerProjectile gServerProjectiles[MAX_PROJECTILES]; // サーバーが管理する弾のリスト
-
-static void SetIntData2DataBlock(void *data,int intData,int *dataSize);
-static void SetCharData2DataBlock(void *data,char charData,int *dataSize);
+static int gActiveProjectileCount = 0;
+static ServerProjectile gServerProjectiles[MAX_PROJECTILES];
 static int gClientWeaponID[MAX_CLIENTS]; 
-static int gServerInitialized = 0; // 初期化フラグ
-
-int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
-    // 武器 0: 高速アタッカー (ダメージ10)
-    { 500, 1000, 10, 100, 3, 20 },
-    // 武器 1: ヘビーシューター (ダメージ30)
-    { 1500, 1500, 30, 120, 1, 5 },
-    // 武器 2: バランス型 (ダメージ20)
-    { 1000, 1200, 20, 110, 2, 10 },
-    // 武器 3: タフネス機 (ダメージ15)
-    { 800, 800, 15, 150, 4, 15 }
-};
+static int gServerInitialized = 0;
 
 int gPlayerPosX[MAX_CLIENTS] = {0}; 
 int gPlayerPosY[MAX_CLIENTS] = {0};
 
+int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
+    { 500,  1000, 10, 100, 3, 20 }, 
+    { 1500, 1500, 30, 120, 1, 5 },
+    { 1000, 1200, 20, 110, 2, 10 }, 
+    { 800,  800,  15, 150, 4, 15 }
+};
+
 extern CLIENT gClients[MAX_CLIENTS];
 extern int GetClientNum(void);
 
-extern int gPlayerPosX[MAX_CLIENTS];
-extern int gPlayerPosY[MAX_CLIENTS];
-
-static int CheckCollision(ServerProjectile *bullet, int playerID) {
-    // プレイヤーの矩形
-    int px = gPlayerPosX[playerID];
-    int py = gPlayerPosY[playerID];
-    int pw = PLAYER_SIZE;
-    int ph = PLAYER_SIZE;
-
-    // 弾の矩形
-    int bx = bullet->x;
-    int by = bullet->y;
-    int bw = PROJECTILE_SIZE;
-    int bh = PROJECTILE_SIZE;
-
-    // 矩形同士の衝突判定 (AABB)
-    return (bx < px + pw &&
-            bx + bw > px &&
-            by < py + ph &&
-            by + bh > py);
+/* ヘルパー関数群 */
+static void SetIntData2DataBlock(void *data, int intData, int *dataSize) {
+    int tmp = htonl(intData);
+    memcpy((char*)data + (*dataSize), &tmp, sizeof(int));
+    (*dataSize) += sizeof(int);
 }
 
-static Uint32 ServerGameLoop(Uint32 interval, void *param) 
-{
-    int numClients = GetClientNum();
-    
-    for (int i = 0; i < MAX_PROJECTILES; i++) {
-        if (gServerProjectiles[i].active) {
-            
-            int shooterID = gServerProjectiles[i].firedByClientID;
-            int weaponID = gClientWeaponID[shooterID];
-            int attackDamage = (weaponID >= 0 && weaponID < MAX_WEAPONS) ? 
-                               gServerWeaponStats[weaponID][STAT_DAMAGE] : 10;
-            
-            char dir = gServerProjectiles[i].direction;
-            
-            // ★★★ 修正箇所: 弾の移動を細分化して判定を行う ★★★
-            int step = SERVER_PROJECTILE_STEP; // 現在の値は 20
-            int hit = 0; 
-            
-            for (int k = 0; k < step; k++) {
-                // 1. 1ピクセルずつ移動
-                if (dir == DIR_UP) {
-                    gServerProjectiles[i].y -= 1;
-                } else if (dir == DIR_DOWN) {
-                    gServerProjectiles[i].y += 1;
-                } else if (dir == DIR_LEFT) {
-                    gServerProjectiles[i].x -= 1;
-                } else if (dir == DIR_RIGHT) {
-                    gServerProjectiles[i].x += 1;
-                }
-                
-                // 2. 衝突判定
-                for (int j = 0; j < numClients; j++) {
-                    // 発射元と自分自身は判定しない
-                    if (j == shooterID) continue;
-
-                    if (CheckCollision(&gServerProjectiles[i], j)) {
-                        hit = 1;
-                        
-                        // 衝突発生時の処理 (既存のログ出力とコマンド送信)
-                        printf(">> HIT! Player %d (%s) was hit by Player %d (%s). Damage: %d\n",
-                               j, gClients[j].name,
-                               shooterID, gClients[shooterID].name,
-                               attackDamage); 
-                               
-                        gServerProjectiles[i].active = 0;
-                        gActiveProjectileCount--;
-                        
-                        // ダメージ適用コマンドを全クライアントに送信
-                        unsigned char data[MAX_DATA];
-                        int dataSize = 0;
-                        SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &dataSize);
-                        SetIntData2DataBlock(data, j, &dataSize);          
-                        SetIntData2DataBlock(data, attackDamage, &dataSize); 
-                        SendData(ALL_CLIENTS, data, dataSize);
-
-                        break; // プレイヤー (j) のループから抜ける
-                    }
-                } // プレイヤー (j) のループ終了
-                
-                if (hit) break; // 衝突したら、この弾のステップループ (k) も終了
-            } // 弾のステップループ (k) 終了
-            // ★★★ 修正終わり ★★★
-
-            // 衝突しなかった場合は画面外チェック
-            if (!gServerProjectiles[i].active) {
-                // 衝突または画面外で非アクティブ化されていたら次の弾へ
-                continue; 
-            }
-            
-            // 画面外チェック (衝突しなかった場合のみ実行)
-            if (gServerProjectiles[i].y < -100 || gServerProjectiles[i].y > 1500 ||
-                gServerProjectiles[i].x < -100 || gServerProjectiles[i].x > 1500) {
-                gServerProjectiles[i].active = 0;
-                gActiveProjectileCount--;
-                continue;
-            }
-        }
-    }
-    
-    // 継続してタイマーを呼び出す
-    return interval; 
+static void SetCharData2DataBlock(void *data, char charData, int *dataSize) {
+    *(char *)((char*)data + (*dataSize)) = charData;
+    (*dataSize) += sizeof(char);
 }
 
-typedef struct {
-    unsigned char cmd;  // 送信コマンド
-} TimerParam;
-
-static Uint32 SendCommandAfterDelay(Uint32 interval, void *param)
-{
+static Uint32 SendCommandAfterDelay(Uint32 interval, void *param) {
     TimerParam *p = (TimerParam*)param;
     unsigned char data[MAX_DATA];
-    int dataSize = 0;
-    SetCharData2DataBlock(data, p->cmd, &dataSize);
-    SendData(ALL_CLIENTS, data, dataSize);
-    
-    // END_COMMANDの場合はサーバー側も終了フラグを立てる必要があるため、特別な処理を行う。
-    // SDLのタイマーはメインスレッドとは別のスレッドで実行されるため、
-    // メインスレッドにイベントをプッシュして終了処理を促す。
+    int ds = 0;
+
+    SetCharData2DataBlock(data, p->cmd, &ds);
+    SendData(ALL_CLIENTS, data, ds);
+
     if (p->cmd == END_COMMAND) {
         SDL_Event event;
         SDL_zero(event);
-        event.type = SDL_QUIT; // SDL_QUITイベントをプッシュしてメインループを終了させる
+        event.type = SDL_QUIT;
         SDL_PushEvent(&event);
     }
-    
+
     free(param);
-    printf("[SERVER] Sent command 0x%02X after 3 seconds delay\n", p->cmd);
     return 0; 
 }
 
-int ExecuteCommand(char command,int pos)
-{
-    if (gServerInitialized == 0) {
+/* 生存判定 */
+void CheckWinnerAndTransition(void) {
+    if (gBattleEndSent) {
+        return;
+    }
+
+    int aliveCount = 0;
+    int clientNum = GetClientNum();
+
+    for (int i = 0; i < clientNum; i++) {
+        if (gServerPlayerHP[i] > 0) {
+            aliveCount++;
+        }
+    }
+
+    if (aliveCount <= 1) {
+        gBattleEndSent = 1;
+        printf("[SERVER] Battle End. Remaining: %d\n", aliveCount);
+        
+        TimerParam *tp = malloc(sizeof(TimerParam));
+        if (tp != NULL) {
+            tp->cmd = NEXT_SCREEN_COMMAND; 
+            SDL_AddTimer(3000, SendCommandAfterDelay, tp);
+        }
+    }
+}
+
+static int CheckCollision(ServerProjectile *bullet, int playerID) {
+    int px = gPlayerPosX[playerID];
+    int py = gPlayerPosY[playerID];
+
+    return (bullet->x < px + PLAYER_SIZE && 
+            bullet->x + PROJECTILE_SIZE > px &&
+            bullet->y < py + PLAYER_SIZE && 
+            bullet->y + PROJECTILE_SIZE > py);
+}
+
+static Uint32 ServerGameLoop(Uint32 interval, void *param) {
+    int numClients = GetClientNum();
+
+    for (int i = 0; i < MAX_PROJECTILES; i++) {
+        if (!gServerProjectiles[i].active) {
+            continue;
+        }
+
+        int sid = gServerProjectiles[i].firedByClientID;
+        int dmg = gServerWeaponStats[gClientWeaponID[sid]][STAT_DAMAGE];
+        char dir = gServerProjectiles[i].direction;
+
+        for (int k = 0; k < SERVER_PROJECTILE_STEP; k++) {
+            if (dir == DIR_UP) {
+                gServerProjectiles[i].y--;
+            } else if (dir == DIR_DOWN) {
+                gServerProjectiles[i].y++;
+            } else if (dir == DIR_LEFT) {
+                gServerProjectiles[i].x--;
+            } else if (dir == DIR_RIGHT) {
+                gServerProjectiles[i].x++;
+            }
+            
+            int hitFound = 0;
+            for (int j = 0; j < numClients; j++) {
+                if (j == sid || gServerPlayerHP[j] <= 0) {
+                    continue;
+                }
+
+                if (CheckCollision(&gServerProjectiles[i], j)) {
+                    // ダメージ計算
+                    gServerPlayerHP[j] -= dmg;
+                    if (gServerPlayerHP[j] < 0) {
+                        gServerPlayerHP[j] = 0;
+                    }
+                    
+                    // クライアントへ通知
+                    unsigned char data[MAX_DATA];
+                    int ds = 0;
+                    SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
+                    SetIntData2DataBlock(data, j, &ds);
+                    SetIntData2DataBlock(data, dmg, &ds);
+                    SendData(ALL_CLIENTS, data, ds);
+
+                    printf("[SERVER] Hit! Player %d HP is now %d\n", j, gServerPlayerHP[j]);
+                    
+                    gServerProjectiles[i].active = 0;
+                    CheckWinnerAndTransition(); 
+                    hitFound = 1;
+                    break;
+                }
+            }
+            if (hitFound) {
+                break;
+            }
+        }
+
+        // 画面外チェック
+        if (gServerProjectiles[i].active) {
+            if (gServerProjectiles[i].y < -100 || gServerProjectiles[i].y > 1500 || 
+                gServerProjectiles[i].x < -100 || gServerProjectiles[i].x > 1500) {
+                gServerProjectiles[i].active = 0;
+            }
+        }
+    }
+    return interval; 
+}
+
+int ExecuteCommand(char command, int pos) {
+    if (!gServerInitialized) {
         for (int i = 0; i < MAX_CLIENTS; i++) {
             gClientWeaponID[i] = -1;
         }
@@ -212,181 +207,141 @@ int ExecuteCommand(char command,int pos)
     }
 
     unsigned char data[MAX_DATA];
-    int dataSize;
+    int ds = 0;
     int endFlag = 1;
-    assert(0 <= pos && pos < MAX_CLIENTS);
-    switch(command){
+
+    switch(command) {
         case END_COMMAND:
-            dataSize = 0;
-            SetCharData2DataBlock(data, END_COMMAND, &dataSize);
-            SendData(ALL_CLIENTS, data, dataSize);
+            ds = 0;
+            SetCharData2DataBlock(data, END_COMMAND, &ds);
+            SendData(ALL_CLIENTS, data, ds);
             endFlag = 0;
             break;
-        case X_COMMAND:
-        {
-            int senderID;
-            int screenState; // ★ 追加: 画面状態を受信するための変数 ★
-            
-            RecvIntData(pos, &senderID);
-            RecvIntData(pos, &screenState); // ★ 追加: 画面状態を受信 ★
 
-            if (senderID < 0 || senderID >= GetClientNum()) 
-                break;
-            
-            // Xキーを初めて押した場合のみフラグを立てる
-            if (gXPressedClientFlags[senderID] == 0) {
-                gXPressedClientFlags[senderID] = 1;
+        case X_COMMAND: {
+            int sid, state;
+            RecvIntData(pos, &sid);
+            RecvIntData(pos, &state);
+
+            if (!gXPressedClientFlags[sid]) {
+                gXPressedClientFlags[sid] = 1;
                 gXPressedCount++;
             }
-            
-            // X押下情報を全クライアントに配信
-            dataSize = 0;
-            SetCharData2DataBlock(data, UPDATE_X_COMMAND, &dataSize);
-            SetIntData2DataBlock(data, senderID, &dataSize);
-            SendData(ALL_CLIENTS, data, dataSize);
-            
-            // ★ 修正: 全員押していた場合の処理 (画面状態によって分岐) ★
+
+            ds = 0;
+            SetCharData2DataBlock(data, UPDATE_X_COMMAND, &ds);
+            SetIntData2DataBlock(data, sid, &ds);
+            SendData(ALL_CLIENTS, data, ds);
+
             if (gXPressedCount == GetClientNum()) {
-                
-                TimerParam *tparam = malloc(sizeof(TimerParam));
-
-                if (screenState == SCREEN_STATE_LOBBY_WAIT) {
-                    // 1. ロビー画面での X 押下 → 武器選択画面へ (3秒後)
-                    
-                    // 座標初期化ロジック (クライアントのInitWindowsロジックに基づく)
-                    int w = DEFAULT_WINDOW_WIDTH;
-                    int h = DEFAULT_WINDOW_HEIGHT;
-                    const int S_SIZE = PLAYER_SIZE; 
-                    
-                    for (int i = 0; i < GetClientNum(); i++) {
-                        switch (i) {
-                            case 0: gPlayerPosX[i] = PADDING; gPlayerPosY[i] = PADDING; break;
-                            case 1: gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = h - PADDING - S_SIZE; break;
-                            case 2: gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = PADDING; break;
-                            case 3: gPlayerPosX[i] = PADDING; gPlayerPosY[i] = h - PADDING - S_SIZE; break;
+                TimerParam *tp = malloc(sizeof(TimerParam));
+                if (tp != NULL) {
+                    if (state == SCREEN_STATE_LOBBY_WAIT) {
+                        int num = GetClientNum();
+                        for (int i = 0; i < num; i++) {
+                            if (i == 0) {
+                                gPlayerPosX[i] = PADDING;
+                                gPlayerPosY[i] = PADDING;
+                            } else if (i == 1) {
+                                gPlayerPosX[i] = DEFAULT_WINDOW_WIDTH - PADDING - PLAYER_SIZE;
+                                gPlayerPosY[i] = DEFAULT_WINDOW_HEIGHT - PADDING - PLAYER_SIZE;
+                            } else if (i == 2) {
+                                gPlayerPosX[i] = DEFAULT_WINDOW_WIDTH - PADDING - PLAYER_SIZE;
+                                gPlayerPosY[i] = PADDING;
+                            } else {
+                                gPlayerPosX[i] = PADDING;
+                                gPlayerPosY[i] = DEFAULT_WINDOW_HEIGHT - PADDING - PLAYER_SIZE;
+                            }
+                            gServerPlayerHP[i] = 150; // 体力初期化
                         }
+                        gBattleEndSent = 0;
+                        tp->cmd = START_GAME_COMMAND;
+                    } else if (state == SCREEN_STATE_TITLE) {
+                        tp->cmd = END_COMMAND;
                     }
-                    
-                    tparam->cmd = START_GAME_COMMAND; // 武器選択へ
-                    printf("[SERVER] All pressed X in LOBBY. Sending START_GAME_COMMAND in 3 seconds.\n");
-                
-                } else if (screenState == SCREEN_STATE_TITLE) {
-                    // 2. 結果画面での X 押下 → ゲーム終了 (3秒後)
-                    tparam->cmd = END_COMMAND; // 終了
-                    printf("[SERVER] All pressed X in TITLE. Sending END_COMMAND in 3 seconds.\n");
-                
-                } else {
-                    // それ以外の画面状態であれば、何もしない（タイマー設定をスキップ）
-                    free(tparam);
-                    tparam = NULL;
+                    SDL_AddTimer(3000, SendCommandAfterDelay, tp);
                 }
-                
-                if (tparam != NULL) {
-                    SDL_AddTimer(3000, SendCommandAfterDelay, tparam);
-                }
-
-                // サーバー側フラグをリセット（次ラウンド/再接続用）
                 gXPressedCount = 0;
                 memset(gXPressedClientFlags, 0, sizeof(gXPressedClientFlags));
             }
-            // ★ 修正ここまで ★
             break;
         }
-        case SELECT_WEAPON_COMMAND:
-        {
-            int senderID = pos;
-            int selectedWeaponID;
-            RecvIntData(senderID, &selectedWeaponID);
-            if (senderID < 0 || senderID >= GetClientNum()) 
-                break;
 
-            if (gClientHands[senderID] == 0) {
-                gClientHands[senderID] = (char)(selectedWeaponID + 1);
-                gClientWeaponID[senderID] = selectedWeaponID; 
-                gHandsCount++;
-            }
+        case SELECT_WEAPON_COMMAND: {
+            int wid;
+            RecvIntData(pos, &wid);
+            gClientWeaponID[pos] = wid;
+            gHandsCount++;
+
             if (gHandsCount == GetClientNum()) {
-                
-                TimerParam *tparam = malloc(sizeof(TimerParam));
-                tparam->cmd = NEXT_SCREEN_COMMAND;
-                SDL_AddTimer(3000, SendCommandAfterDelay, tparam);
+                TimerParam *tp = malloc(sizeof(TimerParam));
+                if (tp != NULL) {
+                    tp->cmd = NEXT_SCREEN_COMMAND;
+                    SDL_AddTimer(3000, SendCommandAfterDelay, tp);
+                }
                 gHandsCount = 0;
-                memset(gClientHands, 0, sizeof(gClientHands));
             }
             break;
         }
-        case MOVE_COMMAND:
-        {
-            int senderID = pos;
-            char direction;
-            RecvCharData(senderID, &direction); 
-            int step = 10; 
-            if (direction == DIR_UP) gPlayerPosY[senderID] -= step;
-            else if (direction == DIR_DOWN) gPlayerPosY[senderID] += step;
-            else if (direction == DIR_LEFT) gPlayerPosX[senderID] -= step;
-            else if (direction == DIR_RIGHT) gPlayerPosX[senderID] += step;
-            dataSize = 0;
-            SetCharData2DataBlock(data, UPDATE_MOVE_COMMAND, &dataSize);
-            SetIntData2DataBlock(data, senderID, &dataSize);
-            SetCharData2DataBlock(data, direction, &dataSize);
-            SendData(ALL_CLIENTS, data, dataSize);
+
+        case MOVE_COMMAND: {
+            char d;
+            RecvCharData(pos, &d);
+            if (d == DIR_UP) {
+                gPlayerPosY[pos] -= 10;
+            } else if (d == DIR_DOWN) {
+                gPlayerPosY[pos] += 10;
+            } else if (d == DIR_LEFT) {
+                gPlayerPosX[pos] -= 10;
+            } else if (d == DIR_RIGHT) {
+                gPlayerPosX[pos] += 10;
+            }
+
+            ds = 0;
+            SetCharData2DataBlock(data, UPDATE_MOVE_COMMAND, &ds);
+            SetIntData2DataBlock(data, pos, &ds);
+            SetCharData2DataBlock(data, d, &ds);
+            SendData(ALL_CLIENTS, data, ds);
             break;
         }
-        case FIRE_COMMAND: 
-        {
-            int clientID, x, y;
-            char direction; 
-            RecvIntData(pos, &clientID); // 発射元ID
-            RecvIntData(pos, &x);        // 初期X座標
-            RecvIntData(pos, &y);        // 初期Y座標
-            RecvCharData(pos, &direction);
+
+        case FIRE_COMMAND: {
+            int id, x, y;
+            char d;
+            RecvIntData(pos, &id);
+            RecvIntData(pos, &x);
+            RecvIntData(pos, &y);
+            RecvCharData(pos, &d);
+
             for (int i = 0; i < MAX_PROJECTILES; i++) {
                 if (!gServerProjectiles[i].active) {
-                    gServerProjectiles[i].active = 1;
-                    gServerProjectiles[i].firedByClientID = clientID;
                     gServerProjectiles[i].x = x;
                     gServerProjectiles[i].y = y;
-                    gServerProjectiles[i].direction = direction;
-                    gActiveProjectileCount++;
+                    gServerProjectiles[i].firedByClientID = id;
+                    gServerProjectiles[i].active = 1;
+                    gServerProjectiles[i].direction = d;
                     break;
                 }
             }
-            static int timerInitialized = 0;
-            if (!timerInitialized) {
-                SDL_AddTimer(1000 / 60, ServerGameLoop, NULL); 
-                timerInitialized = 1;
+
+            static int ti = 0;
+            if (!ti) {
+                SDL_AddTimer(16, ServerGameLoop, NULL);
+                ti = 1;
             }
-            printf("[SERVER] Client %d fired! Active projectiles: %d\n",clientID,gActiveProjectileCount);
-            dataSize = 0;
-            SetCharData2DataBlock(data, UPDATE_PROJECTILE_COMMAND, &dataSize); 
-            SetIntData2DataBlock(data, clientID, &dataSize);                   
-            SetIntData2DataBlock(data, x, &dataSize);                          
-            SetIntData2DataBlock(data, y, &dataSize);                        
-            SetCharData2DataBlock(data, direction, &dataSize);                      
-            SendData(ALL_CLIENTS, data, dataSize);
-            
+
+            ds = 0;
+            SetCharData2DataBlock(data, UPDATE_PROJECTILE_COMMAND, &ds);
+            SetIntData2DataBlock(data, id, &ds);
+            SetIntData2DataBlock(data, x, &ds);
+            SetIntData2DataBlock(data, y, &ds);
+            SetCharData2DataBlock(data, d, &ds);
+            SendData(ALL_CLIENTS, data, ds);
             break;
         }
+
         default:
-            fprintf(stderr,"Unknown command: 0x%02x\n", (unsigned char)command);
             break;
     }
     return endFlag;
-}
-static void SetIntData2DataBlock(void *data,int intData,int *dataSize)
-{
-    int tmp;
-    assert(data!=NULL);
-    assert(0 <= (*dataSize));
-    tmp = htonl(intData);
-    memcpy((char*)data + (*dataSize), &tmp, sizeof(int));
-    (*dataSize) += sizeof(int);
-}
-
-static void SetCharData2DataBlock(void *data,char charData,int *dataSize)
-{
-    assert(data!=NULL);
-    assert(0 <= (*dataSize));
-    *(char *)((char*)data + (*dataSize)) = charData;
-    (*dataSize) += sizeof(char);
 }

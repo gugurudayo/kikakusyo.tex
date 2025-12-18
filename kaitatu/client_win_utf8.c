@@ -51,7 +51,7 @@ static char gAllClientNames[MAX_CLIENTS][MAX_NAME_SIZE];
 static int gClientCount = 0;
 int gMyClientID = -1;
 static int gXPressedFlags[MAX_CLIENTS] = {0};
-static int gCurrentScreenState = SCREEN_STATE_LOBBY_WAIT;
+int gCurrentScreenState = SCREEN_STATE_LOBBY_WAIT; // ★ 修正: 外部参照可能に ★
 static int gWeaponSent = 0;
 static int gControlMode = MODE_MOVE; 
 static int gPlayerPosX[MAX_CLIENTS];
@@ -59,8 +59,7 @@ static int gPlayerPosY[MAX_CLIENTS];
 
 static int gPlayerMoveStep[MAX_CLIENTS]; 
 
-//12/15　西脇　追記
-static int gSelectedWeaponID = -1; // -1 = 未選択
+static int gSelectedWeaponID = -1;
 
 Projectile gProjectiles[MAX_PROJECTILES];
 
@@ -268,29 +267,31 @@ void DrawImageAndText(void){
         int rightX=leftX+rectW+P;
         int topY=(h-(rectH*2+P))/2 + Y_OFF;
         int bottomY=topY+rectH+P;
-
-        int mx, my;
-SDL_GetMouseState(&mx, &my);
         
+        int mx, my;
+        SDL_GetMouseState(&mx, &my);
+
         for (int i = 0; i < MAX_WEAPONS; i++) {
             SDL_Rect r;
+            
 
             // 座標と色を設定
-                if (i == 0) { r.x = leftX;  r.y = topY; }
-    else if (i == 1) { r.x = rightX; r.y = topY; }
-    else if (i == 2) { r.x = leftX;  r.y = bottomY; }
-    else if (i == 3) { r.x = rightX; r.y = bottomY; }
-
+             if (i == 0) { r.x = leftX;  r.y = topY; }
+            else if (i == 1) { r.x = rightX; r.y = topY; }
+            else if (i == 2) { r.x = leftX;  r.y = bottomY; }
+            else if (i == 3) { r.x = rightX; r.y = bottomY; }
             r.w=rectW; r.h=rectH;
-
-            Uint8 baseR = 180, baseG = 190, baseB = 200;
+             Uint8 baseR = 180, baseG = 190, baseB = 200;
     Uint8 hoverR = 140, hoverG = 150, hoverB = 160;
 
     int isHover = (mx >= r.x && mx < r.x + r.w &&
                    my >= r.y && my < r.y + r.h);
 
     Uint8 rColor = baseR, gColor = baseG, bColor = baseB;
-    if (isHover || gSelectedWeaponID == i) { rColor = hoverR; gColor = hoverG; bColor = hoverB; }
+    if (isHover || gSelectedWeaponID == i)
+        {
+         rColor = hoverR; gColor = hoverG; bColor = hoverB;
+         }
             // 長方形の描画
             SDL_SetRenderDrawColor(gMainRenderer, rColor, gColor, bColor, 255); 
             SDL_RenderFillRect(gMainRenderer,&r);
@@ -367,10 +368,17 @@ SDL_GetMouseState(&mx, &my);
 
             // プレイヤーを区別するために、ここではクライアントIDに基づいた色を設定
             Uint8 r=0, g=0, b=0;
-            if (i == 0) { r=255; g=0; b=0; } // 1人目: 赤
-            else if (i == 1) { r=0; g=0; b=255; } // 2人目: 青
-            else if (i == 2) { r=255; g=255; b=0; } // 3人目: 黄
-            else if (i == 3) { r=0; g=255; g=0; } // 4人目: 緑
+
+            if (currentHP <= 0) {
+                // 体力が0ならグレー（脱落状態）
+                r = 128; g = 128; b = 128;
+            } else {
+                // 生存している場合はIDごとの色
+                if (i == 0) { r=255; g=0; b=0; }        // 1人目: 赤
+                else if (i == 1) { r=0; g=0; b=255; }   // 2人目: 青
+                else if (i == 2) { r=255; g=255; b=0; } // 3人目: 黄
+                else if (i == 3) { r=0; g=255; b=0; }   // 4人目: 緑
+            }
 
             SDL_SetRenderDrawColor(gMainRenderer, r, g, b, 255);
             SDL_RenderFillRect(gMainRenderer, &playerRect);
@@ -422,7 +430,7 @@ SDL_GetMouseState(&mx, &my);
             helpTextY = h - textH - 40;
             DrawText_Internal(msg,(w-textW)/2,helpTextY,0,0,200,gFontNormal);
         }
-        // 結果ボックス描画
+        // 結果ボックス描画 (外枠は削除)
         int topMargin = 20;
         int bottomMargin = 20;
         int rectCount = gClientCount; // 参加人数分だけ描画
@@ -431,6 +439,9 @@ SDL_GetMouseState(&mx, &my);
         int rectH = (availableHeight - spacing*(rectCount-1)) / rectCount;
         int rectW = 350;
         int startX = (w - rectW)/2;
+        
+        // 以下のコードブロック（赤い外枠の描画）を削除
+        /*
         SDL_SetRenderDrawColor(gMainRenderer,255,0,0,255);
         SDL_Rect rect;
         for (int i=0; i<rectCount; i++){
@@ -440,6 +451,8 @@ SDL_GetMouseState(&mx, &my);
             rect.h = rectH;
             SDL_RenderDrawRect(gMainRenderer,&rect);
         }
+        */
+        
         // ラベル & 名前
         const char* rankLabels[4] = {"1st:","2nd:","3rd:","4th:"};
         for(int i=0; i<rectCount; i++){
@@ -463,6 +476,11 @@ SDL_GetMouseState(&mx, &my);
             int nameX = labelX + textW + 20;
             int nameY = rectY + (rectH - nameH)/2;
             DrawText_Internal(nameAndHP, nameX, nameY, 0,0,255,gFontName);
+
+            // X Pressed の表示ロジック
+            if (gXPressedFlags[clientID] == 1){
+                DrawText_Internal("X Pressed", nameX + nameW + 20, nameY, 255, 0, 0, gFontName); // 赤文字で表示
+            }
         }
     }
     SDL_RenderPresent(gMainRenderer);
@@ -605,18 +623,17 @@ void WindowEvent(int num){
                 SendEndCommand();
                 break;
             case SDL_KEYDOWN:
-                // ロビー待機画面でのみ X キー入力を受け付ける
-                if (event.key.keysym.sym == SDLK_x && gCurrentScreenState == SCREEN_STATE_LOBBY_WAIT)
+                // ロビー待機画面 または 結果画面 で X キー入力を受け付ける
+                if (event.key.keysym.sym == SDLK_x && 
+                   (gCurrentScreenState == SCREEN_STATE_LOBBY_WAIT || gCurrentScreenState == SCREEN_STATE_TITLE))
                 {
                     if (gXPressedFlags[gMyClientID] == 0) {
                         // 自分の準備フラグを立ててサーバに通知する（未押下の場合のみ）
                         gXPressedFlags[gMyClientID] = 1;
                         DrawImageAndText();
-                        unsigned char data[MAX_DATA];
-                        int dataSize = 0;
-                        SetCharData2DataBlock(data, X_COMMAND, &dataSize);
-                        SetIntData2DataBlock(data, gMyClientID, &dataSize);
-                        SendData(data, dataSize);
+                        
+                        // ★ 修正: 新しい関数で現在の画面状態を送信 ★
+                        SendXCommandWithState(gMyClientID, gCurrentScreenState);
                     }
                 }
                 else if (event.key.keysym.sym == SDLK_m)
@@ -625,15 +642,21 @@ void WindowEvent(int num){
                 }
 
                 if (gCurrentScreenState == SCREEN_STATE_RESULT) 
-                {
+                {   
+                    if (gPlayerHP[gMyClientID] <= 0) {
+                        break; 
+                    }
+
                     // モード切替キー (Cキー) の処理
                     if (event.key.keysym.sym == SDLK_c) {
                         gControlMode = (gControlMode == MODE_MOVE) ? MODE_FIRE : MODE_MOVE;
-                        DrawImageAndText(); // モード表示を更新
+                        DrawImageAndText(); 
                         break;
                     }
+
                     // --- 移動モードの処理 (gControlMode == MODE_MOVE) ---
                     if (gControlMode == MODE_MOVE) {
+                        /* ... (移動処理: 既存のまま) ... */
                         char direction = 0;
                         switch (event.key.keysym.sym) {
                             case SDLK_UP: direction = DIR_UP; break;
@@ -642,7 +665,6 @@ void WindowEvent(int num){
                             case SDLK_RIGHT: direction = DIR_RIGHT; break;
                         }
                         if (direction != 0) {
-                            // サーバーに移動コマンドと方向を送信
                             unsigned char data[MAX_DATA];
                             int dataSize = 0;
                             SetCharData2DataBlock(data, MOVE_COMMAND, &dataSize);
@@ -652,23 +674,16 @@ void WindowEvent(int num){
                     }
                     // --- 発射モードの処理 (gControlMode == MODE_FIRE) ---
                     else if (gControlMode == MODE_FIRE) {
-                        
+                        /* ... (発射処理: 既存のまま) ... */
                         if (event.key.keysym.sym == SDLK_SPACE) {
                             const Uint8 *state = SDL_GetKeyboardState(NULL);
                             char fireDirection = 0;                           
-                            // 押された方向キーを検出
-                            if (state[SDL_SCANCODE_UP]) {
-                                fireDirection = DIR_UP;
-                            } else if (state[SDL_SCANCODE_DOWN]) {
-                                fireDirection = DIR_DOWN;
-                            } else if (state[SDL_SCANCODE_LEFT]) {
-                                fireDirection = DIR_LEFT;
-                            } else if (state[SDL_SCANCODE_RIGHT]) {
-                                fireDirection = DIR_RIGHT;
-                            }
+                            if (state[SDL_SCANCODE_UP]) fireDirection = DIR_UP;
+                            else if (state[SDL_SCANCODE_DOWN]) fireDirection = DIR_DOWN;
+                            else if (state[SDL_SCANCODE_LEFT]) fireDirection = DIR_LEFT;
+                            else if (state[SDL_SCANCODE_RIGHT]) fireDirection = DIR_RIGHT;
                             
                             if (fireDirection != 0) {
-                                // 方向が指定されていれば発射コマンドを送信
                                 SendFireCommand(fireDirection);
                             }
                         }
@@ -699,7 +714,7 @@ void WindowEvent(int num){
                         else if (y >= bottomY && y < bottomY + rectH) selectedID = 3; // 右下
                     }
                     if (selectedID != -1 && gWeaponSent == 0){
-                        gSelectedWeaponID = selectedID;
+                          gSelectedWeaponID = selectedID;
                         DrawImageAndText(); // ★ クリック直後に見た目更新
                         unsigned char data[MAX_DATA];
                         int dataSize = 0;
@@ -748,11 +763,18 @@ void SetScreenState(int state){
     }
     else if (state == SCREEN_STATE_RESULT) {
          printf("[DEBUG] RESULT state - timer will be set\n");
-    }   
+    } 
+  
+    else if (state == SCREEN_STATE_TITLE) {
+        printf("[DEBUG] TITLE state - reset X flags\n");
+        memset(gXPressedFlags, 0, sizeof(gXPressedFlags));
+    }
+    
     DrawImageAndText(); 
     // 結果画面表示時にタイマーを設定
     if (state == SCREEN_STATE_RESULT) {
-        SDL_AddTimer(90000, BackToTitleScreen, NULL);//制限時間
+        printf("[DEBUG] Battle started. Waiting for winner...\n");
+        // タイマー設定を削除
     }
 }
 

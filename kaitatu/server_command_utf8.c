@@ -16,13 +16,17 @@
 #define MAX_STATS_PER_WEAPON 6
 #define STAT_DAMAGE 2 
 
-// ★ 追加: 衝突判定を広げるマージン (例: 5ピクセル) ★
-#define HIT_MARGIN 5
-
-// クライアント側のInitWindowsロジックに基づく定数を定義
+// ★ 追加: クライアント側のInitWindowsロジックに基づく定数を定義
 #define DEFAULT_WINDOW_WIDTH 1300
 #define DEFAULT_WINDOW_HEIGHT 1000
 const int PADDING = 50; 
+// ★ ここまで追加 ★
+
+// 画面状態の定数
+#define SCREEN_STATE_LOBBY_WAIT 0
+#define SCREEN_STATE_GAME_SCREEN 1
+#define SCREEN_STATE_RESULT 2
+#define SCREEN_STATE_TITLE 3
 
 
 typedef struct {
@@ -81,14 +85,11 @@ static int CheckCollision(ServerProjectile *bullet, int playerID) {
     int bw = PROJECTILE_SIZE;
     int bh = PROJECTILE_SIZE;
 
-    // ★ 修正: マージンを追加し、判定領域を広げる ★
-    const int margin = HIT_MARGIN; 
-    
     // 矩形同士の衝突判定 (AABB)
-    return (bx < px + pw + margin &&    
-            bx + bw > px - margin &&    
-            by < py + ph + margin &&    
-            by + bh > py - margin);     
+    return (bx < px + pw &&
+            bx + bw > px &&
+            by < py + ph &&
+            by + bh > py);
 }
 
 static Uint32 ServerGameLoop(Uint32 interval, void *param) 
@@ -105,7 +106,7 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param)
             
             char dir = gServerProjectiles[i].direction;
             
-            // 弾の移動を細分化して判定を行う
+            // ★★★ 修正箇所: 弾の移動を細分化して判定を行う ★★★
             int step = SERVER_PROJECTILE_STEP; // 現在の値は 20
             int hit = 0; 
             
@@ -152,6 +153,7 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param)
                 
                 if (hit) break; // 衝突したら、この弾のステップループ (k) も終了
             } // 弾のステップループ (k) 終了
+            // ★★★ 修正終わり ★★★
 
             // 衝突しなかった場合は画面外チェック
             if (!gServerProjectiles[i].active) {
@@ -184,6 +186,17 @@ static Uint32 SendCommandAfterDelay(Uint32 interval, void *param)
     int dataSize = 0;
     SetCharData2DataBlock(data, p->cmd, &dataSize);
     SendData(ALL_CLIENTS, data, dataSize);
+    
+    // END_COMMANDの場合はサーバー側も終了フラグを立てる必要があるため、特別な処理を行う。
+    // SDLのタイマーはメインスレッドとは別のスレッドで実行されるため、
+    // メインスレッドにイベントをプッシュして終了処理を促す。
+    if (p->cmd == END_COMMAND) {
+        SDL_Event event;
+        SDL_zero(event);
+        event.type = SDL_QUIT; // SDL_QUITイベントをプッシュしてメインループを終了させる
+        SDL_PushEvent(&event);
+    }
+    
     free(param);
     printf("[SERVER] Sent command 0x%02X after 3 seconds delay\n", p->cmd);
     return 0; 
@@ -212,52 +225,71 @@ int ExecuteCommand(char command,int pos)
         case X_COMMAND:
         {
             int senderID;
+            int screenState; // ★ 追加: 画面状態を受信するための変数 ★
+            
             RecvIntData(pos, &senderID);
+            RecvIntData(pos, &screenState); // ★ 追加: 画面状態を受信 ★
+
             if (senderID < 0 || senderID >= GetClientNum()) 
                 break;
+            
+            // Xキーを初めて押した場合のみフラグを立てる
             if (gXPressedClientFlags[senderID] == 0) {
                 gXPressedClientFlags[senderID] = 1;
                 gXPressedCount++;
             }
+            
+            // X押下情報を全クライアントに配信
             dataSize = 0;
             SetCharData2DataBlock(data, UPDATE_X_COMMAND, &dataSize);
             SetIntData2DataBlock(data, senderID, &dataSize);
             SendData(ALL_CLIENTS, data, dataSize);
-            // もし全員押していたら => 3秒後に START_GAME_COMMAND を送信
+            
+            // ★ 修正: 全員押していた場合の処理 (画面状態によって分岐) ★
             if (gXPressedCount == GetClientNum()) {
-                // クライアントのInitWindowsに合わせてサーバー側座標を初期化
-                int w = DEFAULT_WINDOW_WIDTH;
-                int h = DEFAULT_WINDOW_HEIGHT;
-                const int S_SIZE = PLAYER_SIZE; 
                 
-                for (int i = 0; i < GetClientNum(); i++) {
-                    switch (i) {
-                        case 0: // 1人目: 左上
-                            gPlayerPosX[i] = PADDING;
-                            gPlayerPosY[i] = PADDING;
-                            break;
-                        case 1: // 2人目: 右下
-                            gPlayerPosX[i] = w - PADDING - S_SIZE;
-                            gPlayerPosY[i] = h - PADDING - S_SIZE;
-                            break;
-                        case 2: // 3人目: 右上
-                            gPlayerPosX[i] = w - PADDING - S_SIZE;
-                            gPlayerPosY[i] = PADDING;
-                            break;
-                        case 3: // 4人目: 左下
-                            gPlayerPosX[i] = PADDING;
-                            gPlayerPosY[i] = h - PADDING - S_SIZE;
-                            break;
+                TimerParam *tparam = malloc(sizeof(TimerParam));
+
+                if (screenState == SCREEN_STATE_LOBBY_WAIT) {
+                    // 1. ロビー画面での X 押下 → 武器選択画面へ (3秒後)
+                    
+                    // 座標初期化ロジック (クライアントのInitWindowsロジックに基づく)
+                    int w = DEFAULT_WINDOW_WIDTH;
+                    int h = DEFAULT_WINDOW_HEIGHT;
+                    const int S_SIZE = PLAYER_SIZE; 
+                    
+                    for (int i = 0; i < GetClientNum(); i++) {
+                        switch (i) {
+                            case 0: gPlayerPosX[i] = PADDING; gPlayerPosY[i] = PADDING; break;
+                            case 1: gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = h - PADDING - S_SIZE; break;
+                            case 2: gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = PADDING; break;
+                            case 3: gPlayerPosX[i] = PADDING; gPlayerPosY[i] = h - PADDING - S_SIZE; break;
+                        }
                     }
+                    
+                    tparam->cmd = START_GAME_COMMAND; // 武器選択へ
+                    printf("[SERVER] All pressed X in LOBBY. Sending START_GAME_COMMAND in 3 seconds.\n");
+                
+                } else if (screenState == SCREEN_STATE_TITLE) {
+                    // 2. 結果画面での X 押下 → ゲーム終了 (3秒後)
+                    tparam->cmd = END_COMMAND; // 終了
+                    printf("[SERVER] All pressed X in TITLE. Sending END_COMMAND in 3 seconds.\n");
+                
+                } else {
+                    // それ以外の画面状態であれば、何もしない（タイマー設定をスキップ）
+                    free(tparam);
+                    tparam = NULL;
+                }
+                
+                if (tparam != NULL) {
+                    SDL_AddTimer(3000, SendCommandAfterDelay, tparam);
                 }
 
-                TimerParam *tparam = malloc(sizeof(TimerParam));
-                tparam->cmd = START_GAME_COMMAND;
-                SDL_AddTimer(3000, SendCommandAfterDelay, tparam);
-                // サーバー側フラグをリセット（次ラウンド用）
+                // サーバー側フラグをリセット（次ラウンド/再接続用）
                 gXPressedCount = 0;
                 memset(gXPressedClientFlags, 0, sizeof(gXPressedClientFlags));
             }
+            // ★ 修正ここまで ★
             break;
         }
         case SELECT_WEAPON_COMMAND:
@@ -270,10 +302,11 @@ int ExecuteCommand(char command,int pos)
 
             if (gClientHands[senderID] == 0) {
                 gClientHands[senderID] = (char)(selectedWeaponID + 1);
-                gClientWeaponID[senderID] = selectedWeaponID; // ★ 武器IDを記録 ★
+                gClientWeaponID[senderID] = selectedWeaponID; 
                 gHandsCount++;
             }
             if (gHandsCount == GetClientNum()) {
+                
                 TimerParam *tparam = malloc(sizeof(TimerParam));
                 tparam->cmd = NEXT_SCREEN_COMMAND;
                 SDL_AddTimer(3000, SendCommandAfterDelay, tparam);

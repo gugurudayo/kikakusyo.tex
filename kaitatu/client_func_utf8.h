@@ -33,6 +33,7 @@ extern void DrawImageAndText(void);
 extern int gMyClientID;     
 extern char gAllName[MAX_CLIENTS][MAX_NAME_SIZE]; 
 extern int gPlayerHP[MAX_CLIENTS]; 
+extern int gCurrentScreenState; // ★ 追加: 画面状態の外部参照 ★
 
 /* client_command.c */
 extern int ExecuteCommand(char command);
@@ -40,11 +41,14 @@ extern void SendEndCommand(void);
 extern void SetMyClientID(int clientID);
 extern void SetIntData2DataBlock(void *data, int intData, int *dataSize);
 extern void SetCharData2DataBlock(void *data, char charData, int *dataSize);
+extern void SendXCommandWithState(int clientID, int screenState); // ★ 追加: 画面状態付きXコマンド送信 ★
+
 
 #define SCREEN_STATE_LOBBY 0       
 #define SCREEN_STATE_GAME_SCREEN 1  
 #define SCREEN_STATE_RESULT 2
-extern int ExecuteCommand(char command);
+#define SCREEN_STATE_TITLE 3 // ★ 結果画面の状態を追加 ★
+
 extern void SetScreenState(int state);
 extern void SetXPressedFlag(int clientID); 
 extern void UpdatePlayerPos(int clientID, char direction); 

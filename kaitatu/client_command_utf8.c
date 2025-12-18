@@ -1,4 +1,5 @@
-/*client_command_utf8.c*/
+/* client_command_utf8.c */
+
 #include "common_utf8.h"
 #include "client_func_utf8.h"
 #include <arpa/inet.h>
@@ -6,163 +7,128 @@
 #include <assert.h>
 #include <string.h> 
 
-void SetIntData2DataBlock(void *data,int intData,int *dataSize);
-void SetCharData2DataBlock(void *data,char charData,int *dataSize);
-static void RecvResultData(void);
-void SetXPressedFlag(int clientID);
+extern int gCurrentScreenState;
+extern int gPlayerHP[MAX_CLIENTS];
+extern Projectile gProjectiles[MAX_PROJECTILES];
 
-// ★ 追加: Xコマンドと現在の画面状態を送信する関数 ★
-void SendXCommandWithState(int clientID, int screenState)
-{
-    unsigned char data[MAX_DATA];
-    int dataSize = 0;
-    
-    SetCharData2DataBlock(data, X_COMMAND, &dataSize);
-    SetIntData2DataBlock(data, clientID, &dataSize);
-    SetIntData2DataBlock(data, screenState, &dataSize); // 画面状態を送信
+/* 自分のID管理 */
+static int gMyID; 
 
-    SendData(data, dataSize);
+void SetMyClientID(int id) {
+    gMyID = id;
+    printf("[DEBUG] My Client ID is set to: %d\n", gMyID);
 }
 
-/* ExecuteCommand: サーバーからのコマンド処理 */
-int ExecuteCommand(char command)
-{
-    int endFlag = 1;
-    switch(command){
-        case END_COMMAND:
-            endFlag = 0;
-            printf("Received END_COMMAND. Shutting down.\n"); // ★ 追加 ★
-            break;
-        case UPDATE_X_COMMAND:
-        {
-            int senderID;
-            RecvIntData(&senderID);
-            SetXPressedFlag(senderID);
-            break;
-        }
-        case START_GAME_COMMAND:
-        {
-            SetScreenState(SCREEN_STATE_GAME_SCREEN);
-            break;
-        }
-        case SELECT_WEAPON_COMMAND:
-        {
-            int selectedWeaponID;
-            RecvIntData(&selectedWeaponID);
-            
-            int newStep = 0;
-            switch (selectedWeaponID) {
-                case 0: 
-                case 1: 
-                    newStep = 20; // 高速
-                    break;
-                case 2: 
-                case 3:
-                default:
-                    newStep = 5; // 低速
-                    break;
-            }
-            SetPlayerMoveStep(gMyClientID, newStep);
-            extern int gWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON]; 
-            break;
-        }
-        case NEXT_SCREEN_COMMAND:
-        {
-            // 全員が武器選択を終えた -> 結果画面（バトル画面）へ
-            SetScreenState(SCREEN_STATE_RESULT);
-            break;
-        }
-        case UPDATE_MOVE_COMMAND:
-        {
-            int clientID;
-            char direction;
-            RecvIntData(&clientID);
-            RecvCharData(&direction); 
-            UpdatePlayerPos(clientID, direction);
-            DrawImageAndText(); 
-            break;
-        }
-        
-        case UPDATE_PROJECTILE_COMMAND: 
-        {
-            int clientID, x, y; 
-            char direction; 
-            RecvIntData(&clientID); // 発射元ID
-            RecvIntData(&x);        // 初期X座標
-            RecvIntData(&y);        // 初期Y座標
-            RecvCharData(&direction); 
-
-            for (int i = 0; i < MAX_PROJECTILES; i++) {
-                if (!gProjectiles[i].active) {
-                    gProjectiles[i].active = 1;
-                    gProjectiles[i].clientID = clientID;
-                    gProjectiles[i].x = x; 
-                    gProjectiles[i].y = y;
-                    gProjectiles[i].direction = direction; 
-                    break;
-                }
-            }
-            DrawImageAndText(); 
-            break;
-        }
-
-        case APPLY_DAMAGE_COMMAND: 
-        {
-            int targetClientID;
-            int damageAmount;
-            RecvIntData(&targetClientID);
-            RecvIntData(&damageAmount);
-            if (targetClientID >= 0 && targetClientID < MAX_CLIENTS) {
-                gPlayerHP[targetClientID] -= damageAmount;
-                if (gPlayerHP[targetClientID] < 0) {
-                    gPlayerHP[targetClientID] = 0;
-                }
-            }
-            DrawImageAndText(); // HPバー更新のため再描画
-            break;
-        }        
-        default:
-            break;
-    }
-    return endFlag;
-}
-/* SendEndCommand: 終了コマンド送信 */
-void SendEndCommand(void)
-{
-    unsigned char data[MAX_DATA];
-    int dataSize = 0;
-    SetCharData2DataBlock(data, END_COMMAND, &dataSize);
-    SendData(data, dataSize);
-}
-
-/* SetIntData2DataBlock: intデータをデータブロックに格納 */
-void SetIntData2DataBlock(void *data,int intData,int *dataSize)
-{
-    int tmp;
-    assert(data!=NULL);
-    assert(0<=(*dataSize));
-    tmp = htonl(intData);
+void SetIntData2DataBlock(void *data, int intData, int *dataSize) {
+    int tmp = htonl(intData);
     memcpy((char*)data + (*dataSize), &tmp, sizeof(int));
     (*dataSize) += sizeof(int);
 }
 
-/* SetCharData2DataBlock: charデータをデータブロックに格納 */
-void SetCharData2DataBlock(void *data,char charData,int *dataSize)
-{
-    assert(data!=NULL);
-    assert(0<=(*dataSize));
+void SetCharData2DataBlock(void *data, char charData, int *dataSize) {
     *(char *)((char*)data + (*dataSize)) = charData;
     (*dataSize) += sizeof(char);
 }
 
-/* RecvResultData: 結果受信（未使用）*/
-static void RecvResultData(void)
-{
-    // ... (省略) ...
+void SendXCommandWithState(int clientID, int screenState) {
+    unsigned char data[MAX_DATA];
+    int ds = 0;
+    
+    SetCharData2DataBlock(data, X_COMMAND, &ds);
+    SetIntData2DataBlock(data, clientID, &ds);
+    SetIntData2DataBlock(data, screenState, &ds);
+    
+    SendData(data, ds);
 }
 
-/* SetMyClientID: 自分のID設定（ここでは未使用）*/
-void SetMyClientID(int clientID)
-{
-    // ... (省略) ...
+int ExecuteCommand(char command) {
+    int endFlag = 1;
+    
+    switch (command) {
+        case END_COMMAND:
+            endFlag = 0;
+            break;
+
+        case UPDATE_X_COMMAND: {
+            int sid;
+            RecvIntData(&sid);
+            SetXPressedFlag(sid);
+            break;
+        }
+
+        case START_GAME_COMMAND:
+            SetScreenState(SCREEN_STATE_GAME_SCREEN);
+            break;
+
+        case NEXT_SCREEN_COMMAND: 
+            if (gCurrentScreenState == SCREEN_STATE_GAME_SCREEN) {
+                SetScreenState(SCREEN_STATE_RESULT);
+            } else if (gCurrentScreenState == SCREEN_STATE_RESULT) {
+                SetScreenState(SCREEN_STATE_TITLE);
+            }
+            break;
+
+        case UPDATE_MOVE_COMMAND: {
+            int sid;
+            char d;
+            RecvIntData(&sid);
+            RecvCharData(&d);
+            UpdatePlayerPos(sid, d);
+            DrawImageAndText();
+            break;
+        }
+
+        case UPDATE_PROJECTILE_COMMAND: {
+            int sid, x, y;
+            char d;
+            RecvIntData(&sid);
+            RecvIntData(&x);
+            RecvIntData(&y);
+            RecvCharData(&d);
+            
+            for (int i = 0; i < MAX_PROJECTILES; i++) {
+                if (!gProjectiles[i].active) {
+                    gProjectiles[i] = (Projectile){x, y, sid, 1, d};
+                    break;
+                }
+            }
+            DrawImageAndText();
+            break;
+        }
+
+        case APPLY_DAMAGE_COMMAND: {
+            int targetID, damage;
+            RecvIntData(&targetID); 
+            RecvIntData(&damage);
+            
+            if (targetID >= 0 && targetID < MAX_CLIENTS) {
+                gPlayerHP[targetID] -= damage;
+                if (gPlayerHP[targetID] < 0) {
+                    gPlayerHP[targetID] = 0;
+                }
+                printf("[CLIENT] Player %d took %d dmg. HP: %d\n", targetID, damage, gPlayerHP[targetID]);
+            }
+            DrawImageAndText();
+            break;
+        }
+
+        case SELECT_WEAPON_COMMAND: {
+            int wid;
+            RecvIntData(&wid);
+            break;
+        }
+
+        default:
+            break;
+    }
+    
+    return endFlag;
+}
+
+void SendEndCommand(void) {
+    unsigned char d[MAX_DATA];
+    int s = 0;
+    
+    SetCharData2DataBlock(d, END_COMMAND, &s);
+    SendData(d, s);
 }

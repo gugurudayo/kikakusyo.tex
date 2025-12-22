@@ -61,6 +61,10 @@ static int gPlayerMoveStep[MAX_CLIENTS];
 
 static int gSelectedWeaponID = -1;
 
+extern int gTrapActive;
+extern int gTrapX;
+extern int gTrapY;
+extern int gTrapType;
 Projectile gProjectiles[MAX_PROJECTILES];
 
 int gPlayerHP[MAX_CLIENTS]; 
@@ -341,11 +345,34 @@ void DrawImageAndText(void){
             }
         }
     }
-    else if (gCurrentScreenState == SCREEN_STATE_RESULT){
-        if (gResultTexture) SDL_RenderCopy(gMainRenderer,gResultTexture,NULL,NULL);
-        else { SDL_SetRenderDrawColor(gMainRenderer,153,204,0,255); 
-        SDL_RenderFillRect(gMainRenderer,NULL); }
-        
+    else if (gCurrentScreenState == SCREEN_STATE_RESULT) {
+        /* --- 1. 背景（マップ）を一番最初に描画 --- */
+        if (gResultTexture) {
+            SDL_RenderCopy(gMainRenderer, gResultTexture, NULL, NULL);
+        } else {
+            SDL_SetRenderDrawColor(gMainRenderer, 153, 204, 0, 255); 
+            SDL_RenderFillRect(gMainRenderer, NULL); 
+        }
+
+        /* --- 2. トラップ（黄色い正方形）を背景の上に描画 --- */
+        if (gTrapActive) {
+            SDL_Rect tr = { gTrapX, gTrapY, 80, 80 };
+            
+            if (gTrapType == 0) {
+                // 黄色：回復
+                SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 0, 255);
+            } else {
+                // 赤色：ダメージ
+                SDL_SetRenderDrawColor(gMainRenderer, 255, 0, 0, 255);
+            }
+            SDL_RenderFillRect(gMainRenderer, &tr);
+            
+            // 枠線を描画（黒）
+            SDL_SetRenderDrawColor(gMainRenderer, 0, 0, 0, 255);
+            SDL_RenderDrawRect(gMainRenderer, &tr);
+        }
+
+        /* --- 3. UI（操作モードなど）の描画 --- */
         char modeMsg[64];
         if (gControlMode == MODE_MOVE) {
             sprintf(modeMsg, "MODE: 移動 (Cキーで発射モードへ)");
@@ -354,132 +381,148 @@ void DrawImageAndText(void){
         }
         DrawText_Internal(modeMsg, 10, 10, 255, 255, 0, gFontNormal);
 
+        /* --- 4. プレイヤーの描画 --- */
         const int SQ_SIZE = 50; 
-        
         for (int i = 0; i < gClientCount; i++) {
-            // プレイヤーが持つ現在の体力
             int currentHP = gPlayerHP[i]; 
 
-            SDL_Rect playerRect;
-            playerRect.x = gPlayerPosX[i]; 
-            playerRect.y = gPlayerPosY[i]; 
-            playerRect.w = SQ_SIZE;
-            playerRect.h = SQ_SIZE;
+            SDL_Rect playerRect = {
+                gPlayerPosX[i], 
+                gPlayerPosY[i], 
+                SQ_SIZE, 
+                SQ_SIZE
+            };
 
-            // プレイヤーを区別するために、ここではクライアントIDに基づいた色を設定
-            Uint8 r=0, g=0, b=0;
-
+            Uint8 r = 0, g = 0, b = 0;
             if (currentHP <= 0) {
-                // 体力が0ならグレー（脱落状態）
-                r = 128; g = 128; b = 128;
+                r = 128; g = 128; b = 128; // 死亡：グレー
             } else {
-                // 生存している場合はIDごとの色
-                if (i == 0) { r=255; g=0; b=0; }        // 1人目: 赤
-                else if (i == 1) { r=0; g=0; b=255; }   // 2人目: 青
-                else if (i == 2) { r=255; g=255; b=0; } // 3人目: 黄
-                else if (i == 3) { r=0; g=255; b=0; }   // 4人目: 緑
+                if (i == 0)      { r = 255; g = 0;   b = 0;   } // 赤
+                else if (i == 1) { r = 0;   g = 0;   b = 255; } // 青
+                else if (i == 2) { r = 255; g = 255; b = 0;   } // 黄
+                else if (i == 3) { r = 0;   g = 255; b = 0;   } // 緑
             }
 
             SDL_SetRenderDrawColor(gMainRenderer, r, g, b, 255);
             SDL_RenderFillRect(gMainRenderer, &playerRect);
             
+            // HPテキストの描画
             if (currentHP > 0) {
                 char hpText[16];
                 sprintf(hpText, "HP: %d", currentHP);
-                
-                // HPの数値表示位置: プレイヤー正方形の少し上
-                int textX = gPlayerPosX[i];
-                int textY = gPlayerPosY[i] - 20; // 20px上に表示
-                
-                Uint8 textR = 255, textG = 255, textB = 255; // デフォルトは白
-                
-                // HPが低い場合は赤にする
+                Uint8 textR = 255, textG = 255, textB = 255;
                 if (currentHP <= MAX_HP / 4) {
-                    textR = 255; textG = 0; textB = 0;
+                    textR = 255; textG = 0; textB = 0; // ピンチは赤字
                 }
-
-                DrawText_Internal(hpText,textX,textY,textR,textG,textB,gFontNormal); // gFontNormal を使用
+                DrawText_Internal(hpText, gPlayerPosX[i], gPlayerPosY[i] - 20, textR, textG, textB, gFontNormal);
             }
-            // 自分のプレイヤーには枠を描画して強調
+
+            // 自分自身の枠線
             if (i == gMyClientID) {
-                SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255); // 白い枠
+                SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255);
                 SDL_RenderDrawRect(gMainRenderer, &playerRect);
             }
         }
+
+        /* --- 5. 弾の描画（一番手前） --- */
         UpdateAndDrawProjectiles();
     }
-    else if (gCurrentScreenState == SCREEN_STATE_TITLE){
-      
+    else if (gCurrentScreenState == SCREEN_STATE_TITLE) {
+
         int rankedIDs[MAX_CLIENTS];
         GetRankedPlayerIDs(rankedIDs);
-        
-        if (gResultBackTexture) SDL_RenderCopy(gMainRenderer,gResultBackTexture,NULL,NULL);
-        else { SDL_SetRenderDrawColor(gMainRenderer,0,0,255,255); SDL_RenderFillRect(gMainRenderer,NULL); }
+
+        if (gResultBackTexture) {
+            SDL_RenderCopy(gMainRenderer, gResultBackTexture, NULL, NULL);
+        } else {
+            SDL_SetRenderDrawColor(gMainRenderer, 0, 0, 255, 255);
+            SDL_RenderFillRect(gMainRenderer, NULL);
+        }
+
+
+        // --- 引き分け判定ロジック ---
+        int isDraw = 0;
+        // 2人以上いて、1位と2位のHPが同じなら引き分け
+        if (gClientCount >= 2) {
+            if (gPlayerHP[rankedIDs[0]] == gPlayerHP[rankedIDs[1]]) {
+                isDraw = 1;
+            }
+        } 
+        // 1人のみでその人が死亡している場合も引き分け（または敗北）扱い
+        else if (gClientCount == 1 && gPlayerHP[rankedIDs[0]] <= 0) {
+            isDraw = 1;
+        }
+
+
         int titleBottomY = 0;
-        if (gFontLarge){
-            int textW=0, textH=0;
-            TTF_SizeUTF8(gFontLarge,"結果発表!!",&textW,&textH);
-            DrawText_Internal("結果発表!!",(w-textW)/2,40,255,255,255,gFontLarge);
+        if (gFontLarge) {
+            int textW = 0, textH = 0;
+            const char* titleMsg = isDraw ? "引き分け！ (DRAW)" : "結果発表!!";
+            
+            TTF_SizeUTF8(gFontLarge, titleMsg, &textW, &textH);
+            DrawText_Internal(titleMsg, (w - textW) / 2, 40, 255, 255, 255, gFontLarge);
             titleBottomY = 40 + textH;
         }
+
+
         int helpTextY = h - 40;
-        if (gFontNormal){
+        if (gFontNormal) {
             const char* msg = "参加者全員がXボタンを押すと、ゲームが終了します。";
-            int textW=0,textH=0;
-            TTF_SizeUTF8(gFontNormal,msg,&textW,&textH);
+            int textW = 0, textH = 0;
+            TTF_SizeUTF8(gFontNormal, msg, &textW, &textH);
             helpTextY = h - textH - 40;
-            DrawText_Internal(msg,(w-textW)/2,helpTextY,0,0,200,gFontNormal);
+            DrawText_Internal(msg, (w - textW) / 2, helpTextY, 0, 0, 200, gFontNormal);
         }
-        // 結果ボックス描画 (外枠は削除)
+
+
+        // 表示レイアウト計算
         int topMargin = 20;
         int bottomMargin = 20;
-        int rectCount = gClientCount; // 参加人数分だけ描画
+        int rectCount = gClientCount; 
         int spacing = 10;
         int availableHeight = (helpTextY - bottomMargin) - (titleBottomY + topMargin);
-        int rectH = (availableHeight - spacing*(rectCount-1)) / rectCount;
-        int rectW = 350;
-        int startX = (w - rectW)/2;
-        
-        // 以下のコードブロック（赤い外枠の描画）を削除
-        /*
-        SDL_SetRenderDrawColor(gMainRenderer,255,0,0,255);
-        SDL_Rect rect;
-        for (int i=0; i<rectCount; i++){
-            rect.x = startX;
-            rect.y = titleBottomY + topMargin + i*(rectH + spacing);
-            rect.w = rectW;
-            rect.h = rectH;
-            SDL_RenderDrawRect(gMainRenderer,&rect);
-        }
-        */
-        
-        // ラベル & 名前
-        const char* rankLabels[4] = {"1st:","2nd:","3rd:","4th:"};
-        for(int i=0; i<rectCount; i++){
-            int rectY = titleBottomY + topMargin + i*(rectH + spacing);
-            // 順位付けされたプレイヤーの元のクライアントIDを取得
+        int rectH = (availableHeight - spacing * (rectCount - 1)) / rectCount;
+        int rectW = 450; // 少し幅を広げました
+        int startX = (w - rectW) / 2;
+
+
+        // 順位表示ループ
+        for (int i = 0; i < rectCount; i++) {
+            int rectY = titleBottomY + topMargin + i * (rectH + spacing);
             int clientID = rankedIDs[i];
+
+            // --- 動的な順位表示（同点なら同じ順位にする） ---
+            int displayRank = i + 1;
+            if (i > 0 && gPlayerHP[rankedIDs[i]] == gPlayerHP[rankedIDs[i - 1]]) {
+                displayRank = i; // 前の人と同じ順位にする
+            }
+
+            char rankText[16];
+            sprintf(rankText, "%d位:", displayRank);
             
-            int textW=0,textH=0;
-            TTF_SizeUTF8(gFontRank, rankLabels[i], &textW, &textH);
+            int textW = 0, textH = 0;
+            TTF_SizeUTF8(gFontRank, rankText, &textW, &textH);
             int labelX = startX + 15;
-            int labelY = rectY + (rectH - textH)/2;
-            DrawText_Internal(rankLabels[i], labelX, labelY, 0,0,255,gFontRank);
-            // 名前とHPの表示
+            int labelY = rectY + (rectH - textH) / 2;
+            DrawText_Internal(rankText, labelX, labelY, 0, 0, 255, gFontRank);
+
+
+            // 名前とHP
             const char* name = gAllClientNames[clientID];
             int hp = gPlayerHP[clientID];
-            char nameAndHP[MAX_NAME_SIZE + 10]; 
-            sprintf(nameAndHP, "%s (HP: %d)", name, hp); // 名前とHPを表示
+            char nameAndHP[MAX_NAME_SIZE + 20]; 
+            sprintf(nameAndHP, "%s (HP: %d)", name, hp);
             
-            int nameW=0,nameH=0;
-            TTF_SizeUTF8(gFontName,nameAndHP,&nameW,&nameH);
+            int nameW = 0, nameH = 0;
+            TTF_SizeUTF8(gFontName, nameAndHP, &nameW, &nameH);
             int nameX = labelX + textW + 20;
-            int nameY = rectY + (rectH - nameH)/2;
-            DrawText_Internal(nameAndHP, nameX, nameY, 0,0,255,gFontName);
+            int nameY = rectY + (rectH - nameH) / 2;
+            DrawText_Internal(nameAndHP, nameX, nameY, 0, 0, 255, gFontName);
 
-            // X Pressed の表示ロジック
-            if (gXPressedFlags[clientID] == 1){
-                DrawText_Internal("X Pressed", nameX + nameW + 20, nameY, 255, 0, 0, gFontName); // 赤文字で表示
+
+            // X Pressed 表示
+            if (gXPressedFlags[clientID] == 1) {
+                DrawText_Internal("X Pressed", nameX + nameW + 20, nameY, 255, 0, 0, gFontName);
             }
         }
     }
@@ -779,52 +822,85 @@ void SetScreenState(int state){
 }
 
 // プレイヤーの座標を更新するヘルパー関数（境界チェックを追加）
+// プレイヤーの座標を更新するヘルパー関数（境界チェック ＋ プレイヤー同士の衝突判定）
 void UpdatePlayerPos(int clientID, char direction)
 {
     if (clientID < 0 || clientID >= MAX_CLIENTS) return;
 
+
     int step = gPlayerMoveStep[clientID];
     int currentX = gPlayerPosX[clientID];
     int currentY = gPlayerPosY[clientID];
+
     int newX = currentX;
     int newY = currentY;
+
     int windowW, windowH;
     SDL_GetWindowSize(gMainWindow, &windowW, &windowH);
 
-    // プレイヤーのサイズ（ここでは 50x50 と仮定）
+
+    // プレイヤーのサイズ（50x50）
     const int SQ_SIZE = 50;   
+
+
     // 1. 移動後の新しい座標を計算
     switch (direction) {
         case DIR_UP:
             newY = currentY - step;
             break;
+
         case DIR_DOWN:
             newY = currentY + step;
             break;
+
         case DIR_LEFT:
             newX = currentX - step;
             break;
+
         case DIR_RIGHT:
             newX = currentX + step;
             break;
     }
 
+
     // 2. 境界チェックを行い、座標を制限する
-    // X軸のチェック
     if (newX < 0) {
-        newX = 0; // 左端 (0) より小さくならないようにする
+        newX = 0; 
     } else if (newX > windowW - SQ_SIZE) {
-        newX = windowW - SQ_SIZE; // 右端 (ウィンドウ幅 - プレイヤーサイズ) を超えないようにする
+        newX = windowW - SQ_SIZE; 
     }
 
-    // Y軸のチェック
     if (newY < 0) {
-        newY = 0; // 上端 (0) より小さくならないようにする
+        newY = 0; 
     } else if (newY > windowH - SQ_SIZE) {
-        newY = windowH - SQ_SIZE; // 下端 (ウィンドウ高 - プレイヤーサイズ) を超えないようにする
+        newY = windowH - SQ_SIZE; 
     }
 
-    // 3. 制限された座標で更新
+
+    // 3. プレイヤー同士の衝突判定（追加部分）
+    // 自分の移動後の位置を矩形(Rect)として定義
+    SDL_Rect myNextRect = { newX, newY, SQ_SIZE, SQ_SIZE };
+
+    for (int i = 0; i < gClientCount; i++) {
+        
+        // 自分自身、または死亡しているプレイヤーは判定から除外
+        if (i == clientID || gPlayerHP[i] <= 0) {
+            continue;
+        }
+
+        // 相手プレイヤーの現在の位置を矩形として定義
+        SDL_Rect otherRect = { gPlayerPosX[i], gPlayerPosY[i], SQ_SIZE, SQ_SIZE };
+
+        // SDLの標準関数を使って矩形同士の重なり（衝突）をチェック
+        if (SDL_HasIntersection(&myNextRect, &otherRect)) {
+            
+            // 衝突している場合は、座標を更新せずにこの関数を抜ける（移動をキャンセル）
+            return; 
+        }
+    }
+
+
+    // 4. 衝突がなければ、最終的な座標を更新
     gPlayerPosX[clientID] = newX;
     gPlayerPosY[clientID] = newY;
 }

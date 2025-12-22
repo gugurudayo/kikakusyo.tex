@@ -24,6 +24,10 @@ const int PADDING = 50;
 #define SCREEN_STATE_GAME_SCREEN 1
 #define SCREEN_STATE_RESULT 2
 #define SCREEN_STATE_TITLE 3
+#define UPPER_LEFT 3
+#define LOWER_LEFT 2
+#define UPPER_RIGHT 1
+#define LOWER_RIGHT 4
 
 typedef struct {
     int x;
@@ -347,6 +351,13 @@ int ExecuteCommand(char command, int pos) {
             RecvIntData(pos, &y);
             RecvCharData(pos, &d);
 
+            int weaponID = gClientWeaposID[id];
+            int maxBullet = GetMaxBulletByWeapos(weaponID);
+
+            if (CountPlayerBullets(id) >= maxBullet) {
+                return endFlag;
+            }
+            
             for (int i = 0; i < MAX_PROJECTILES; i++) {
                 if (!gServerProjectiles[i].active) {
                     gServerProjectiles[i].x = x;
@@ -376,4 +387,27 @@ int ExecuteCommand(char command, int pos) {
         default: break;
     }
     return endFlag;
+}
+
+int GetMaxBulletByWeapon(int weaponID)
+{
+    switch(weaponID){
+    case 0: return UPPER_LEFT;
+    case 1: return UPPER_RIGHT;
+    case 2: return LOWER_LEFT;
+    case 3: return LOWER_RIGHT;
+    default: return 0;
+    }
+}
+
+int CountPlayerBullets(int playerID)
+{
+    int count = 0;
+for (int i = 0; i < MAXPROJECTILES; i++){
+    if (gServerProjectiles[i].active &&
+        gServerProjectiles[i].firedByClientID == playerID) {
+        count++;
+    }
+}
+return count;
 }

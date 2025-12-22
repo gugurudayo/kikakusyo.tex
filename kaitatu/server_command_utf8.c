@@ -353,8 +353,8 @@ int ExecuteCommand(char command, int pos) {
             RecvIntData(pos, &y);
             RecvCharData(pos, &d);
 
-            int weaponID = gClientWeaposID[id];
-            int maxBullet = GetMaxBulletByWeapos(weaponID);
+            int weaponID = gClientWeaponID[id];
+            int maxBullet = GetMaxBulletByWeapon(weaponID);
 
             if (CountPlayerBullets(id) >= maxBullet) {
                 return endFlag;
@@ -405,7 +405,7 @@ int GetMaxBulletByWeapon(int weaponID)
 int CountPlayerBullets(int playerID)
 {
     int count = 0;
-for (int i = 0; i < MAXPROJECTILES; i++){
+for (int i = 0; i < MAX_PROJECTILES; i++){
     if (gServerProjectiles[i].active &&
         gServerProjectiles[i].firedByClientID == playerID) {
         count++;

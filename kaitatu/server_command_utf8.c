@@ -59,6 +59,8 @@ static SDL_Rect gTrapRect = {0, 0, 80, 80};
 
 int gPlayerPosX[MAX_CLIENTS] = {0}; 
 int gPlayerPosY[MAX_CLIENTS] = {0};
+static int GetMaxBulletByWeapon(int weaponID);
+static int CountPlayerBullets(int playerID);
 
 int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
     { 500,  1000, 10, 100, 3, 20 }, 

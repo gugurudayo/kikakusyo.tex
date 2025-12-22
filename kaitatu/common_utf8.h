@@ -43,5 +43,5 @@
 #define DIR_LEFT  'L'
 #define DIR_RIGHT 'R'
 #define TRANSITION_TIMER_ID 100 /* 画面遷移時の遅延時間（ミリ秒） */
-
+#define UPDATE_TRAP_COMMAND 0x08 /* サーバーが全クライアントへ罠設置情報を配信 */
 #endif

@@ -14,6 +14,12 @@ extern Projectile gProjectiles[MAX_PROJECTILES];
 /* 自分のID管理 */
 static int gMyID; 
 
+/* ★追加：トラップの状態を保持する変数（client_win_utf8.cでも使用） ★ */
+int gTrapActive = 0;
+int gTrapX = 0;
+int gTrapY = 0;
+int gTrapType = 0; 
+
 void SetMyClientID(int id) {
     gMyID = id;
     printf("[DEBUG] My Client ID is set to: %d\n", gMyID);
@@ -103,10 +109,32 @@ int ExecuteCommand(char command) {
             
             if (targetID >= 0 && targetID < MAX_CLIENTS) {
                 gPlayerHP[targetID] -= damage;
+                /* 最大HP(150)を超えないように制限 */
+                if (gPlayerHP[targetID] > 150) {
+                    gPlayerHP[targetID] = 150;
+                }
                 if (gPlayerHP[targetID] < 0) {
                     gPlayerHP[targetID] = 0;
                 }
-                printf("[CLIENT] Player %d took %d dmg. HP: %d\n", targetID, damage, gPlayerHP[targetID]);
+                printf("[CLIENT] Player %d HP update: %d (change: %d)\n", targetID, gPlayerHP[targetID], damage);
+            }
+            DrawImageAndText();
+            break;
+        }
+
+        /* ★追加：サーバーからのトラップ通知を受信 ★ */
+        case UPDATE_TRAP_COMMAND: {
+            int active;
+            RecvIntData(&active);
+            gTrapActive = active;
+            
+            if (active) {
+                RecvIntData(&gTrapX);
+                RecvIntData(&gTrapY);
+                RecvIntData(&gTrapType); // ★追加 タイプを受信
+                printf("[CLIENT] Trap SPAWNED at (%d, %d)\n", gTrapX, gTrapY);
+            } else {
+                printf("[CLIENT] Trap DESPAWNED\n");
             }
             DrawImageAndText();
             break;

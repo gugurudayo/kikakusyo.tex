@@ -220,7 +220,10 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
             else if (dir == DIR_DOWN) gServerProjectiles[i].y++;
             else if (dir == DIR_LEFT) gServerProjectiles[i].x--;
             else if (dir == DIR_RIGHT) gServerProjectiles[i].x++;
-            
+            else if (dir == DIR_UP_LEFT)    { gServerProjectiles[i].y--; gServerProjectiles[i].x--; }
+    else if (dir == DIR_UP_RIGHT)   { gServerProjectiles[i].y--; gServerProjectiles[i].x++; }
+    else if (dir == DIR_DOWN_LEFT)  { gServerProjectiles[i].y++; gServerProjectiles[i].x--; }
+    else if (dir == DIR_DOWN_RIGHT) { gServerProjectiles[i].y++; gServerProjectiles[i].x++; }
             int hitFound = 0;
             for (int j = 0; j < numClients; j++) {
                 if (j == sid || gServerPlayerHP[j] <= 0) continue;
@@ -330,20 +333,27 @@ int ExecuteCommand(char command, int pos) {
         }
 
         case MOVE_COMMAND: {
-            char d;
-            RecvCharData(pos, &d);
-            if (d == DIR_UP) gPlayerPosY[pos] -= 10;
-            else if (d == DIR_DOWN) gPlayerPosY[pos] += 10;
-            else if (d == DIR_LEFT) gPlayerPosX[pos] -= 10;
-            else if (d == DIR_RIGHT) gPlayerPosX[pos] += 10;
+    char d;
+    RecvCharData(pos, &d);
+    
+    int step = 10; 
+    if (d == DIR_UP) { gPlayerPosY[pos] -= step; }
+    else if (d == DIR_DOWN) { gPlayerPosY[pos] += step; }
+    else if (d == DIR_LEFT) { gPlayerPosX[pos] -= step; }
+    else if (d == DIR_RIGHT) { gPlayerPosX[pos] += step; }
+    /* --- 斜め移動の座標更新を追加 --- */
+    else if (d == DIR_UP_LEFT)    { gPlayerPosY[pos] -= step; gPlayerPosX[pos] -= step; }
+    else if (d == DIR_UP_RIGHT)   { gPlayerPosY[pos] -= step; gPlayerPosX[pos] += step; }
+    else if (d == DIR_DOWN_LEFT)  { gPlayerPosY[pos] += step; gPlayerPosX[pos] -= step; }
+    else if (d == DIR_DOWN_RIGHT) { gPlayerPosY[pos] += step; gPlayerPosX[pos] += step; }
 
-            ds = 0;
-            SetCharData2DataBlock(data, UPDATE_MOVE_COMMAND, &ds);
-            SetIntData2DataBlock(data, pos, &ds);
-            SetCharData2DataBlock(data, d, &ds);
-            SendData(ALL_CLIENTS, data, ds);
-            break;
-        }
+    ds = 0;
+    SetCharData2DataBlock(data, UPDATE_MOVE_COMMAND, &ds);
+    SetIntData2DataBlock(data, pos, &ds);
+    SetCharData2DataBlock(data, d, &ds);
+    SendData(ALL_CLIENTS, data, ds);
+    break;
+}
 
         case FIRE_COMMAND: {
             int id, x, y;

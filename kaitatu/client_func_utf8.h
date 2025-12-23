@@ -2,14 +2,6 @@
 #define _CLIENT_FUNC_H_
 #include"common_utf8.h"
 
-// 発射体の構造体 
-typedef struct {
-    int x;
-    int y;
-    int clientID; // 誰が撃ったか
-    int active;   // 1:有効, 0:無効
-    char direction;
-} Projectile;
 
 extern Projectile gProjectiles[MAX_PROJECTILES];
 

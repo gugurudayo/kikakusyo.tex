@@ -116,7 +116,10 @@ void UpdateAndDrawProjectiles(void)
             } else if (dir == DIR_RIGHT) {
                 gProjectiles[i].x += step;
             }
-
+            else if (dir == DIR_UP_LEFT)    { gProjectiles[i].y -= step; gProjectiles[i].x -= step; }
+else if (dir == DIR_UP_RIGHT)   { gProjectiles[i].y -= step; gProjectiles[i].x += step; }
+else if (dir == DIR_DOWN_LEFT)  { gProjectiles[i].y += step; gProjectiles[i].x -= step; }
+else if (dir == DIR_DOWN_RIGHT) { gProjectiles[i].y += step; gProjectiles[i].x += step; }
             // 2. 画面外チェック (X座標のチェックも追加)
             int windowW, windowH;
             SDL_GetWindowSize(gMainWindow, &windowW, &windowH);
@@ -687,50 +690,82 @@ void WindowEvent(int num){
                 if (gCurrentScreenState == SCREEN_STATE_RESULT) 
                 {   
                     if (gPlayerHP[gMyClientID] <= 0) {
-                        break; 
-                    }
+        break; 
+    }
 
-                    // モード切替キー (Cキー) の処理
-                    if (event.key.keysym.sym == SDLK_c) {
-                        gControlMode = (gControlMode == MODE_MOVE) ? MODE_FIRE : MODE_MOVE;
-                        DrawImageAndText(); 
-                        break;
-                    }
+    // モード切替キー (Cキー) の処理
+    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_c) {
+        gControlMode = (gControlMode == MODE_MOVE) ? MODE_FIRE : MODE_MOVE;
+        DrawImageAndText(); 
+        break;
+    }
 
-                    // --- 移動モードの処理 (gControlMode == MODE_MOVE) ---
-                    if (gControlMode == MODE_MOVE) {
-                        /* ... (移動処理: 既存のまま) ... */
-                        char direction = 0;
-                        switch (event.key.keysym.sym) {
-                            case SDLK_UP: direction = DIR_UP; break;
-                            case SDLK_DOWN: direction = DIR_DOWN; break;
-                            case SDLK_LEFT: direction = DIR_LEFT; break;
-                            case SDLK_RIGHT: direction = DIR_RIGHT; break;
-                        }
-                        if (direction != 0) {
-                            unsigned char data[MAX_DATA];
-                            int dataSize = 0;
-                            SetCharData2DataBlock(data, MOVE_COMMAND, &dataSize);
-                            SetCharData2DataBlock(data, direction, &dataSize);
-                            SendData(data, dataSize);
-                        }
-                    }
+
+// --- 移動モードの処理 (gControlMode == MODE_MOVE) ---
+if (gControlMode == MODE_MOVE) {
+    const Uint8 *keyState = SDL_GetKeyboardState(NULL);
+    char direction = 0;
+
+    // 同時押しの判定
+    if (keyState[SDL_SCANCODE_UP] && keyState[SDL_SCANCODE_LEFT]) {
+        direction = DIR_UP_LEFT;
+    } else if (keyState[SDL_SCANCODE_UP] && keyState[SDL_SCANCODE_RIGHT]) {
+        direction = DIR_UP_RIGHT;
+    } else if (keyState[SDL_SCANCODE_DOWN] && keyState[SDL_SCANCODE_LEFT]) {
+        direction = DIR_DOWN_LEFT;
+    } else if (keyState[SDL_SCANCODE_DOWN] && keyState[SDL_SCANCODE_RIGHT]) {
+        direction = DIR_DOWN_RIGHT;
+    } else if (keyState[SDL_SCANCODE_UP]) {
+        direction = DIR_UP;
+    } else if (keyState[SDL_SCANCODE_DOWN]) {
+        direction = DIR_DOWN;
+    } else if (keyState[SDL_SCANCODE_LEFT]) {
+        direction = DIR_LEFT;
+    } else if (keyState[SDL_SCANCODE_RIGHT]) {
+        direction = DIR_RIGHT;
+    }
+
+    // 方向が決定された場合のみ送信
+    if (direction != 0) {
+        unsigned char data[MAX_DATA];
+        int dataSize = 0;
+        SetCharData2DataBlock(data, MOVE_COMMAND, &dataSize);
+        SetCharData2DataBlock(data, direction, &dataSize);
+        SendData(data, dataSize);
+    }
+}
                     // --- 発射モードの処理 (gControlMode == MODE_FIRE) ---
                     else if (gControlMode == MODE_FIRE) {
-                        /* ... (発射処理: 既存のまま) ... */
-                        if (event.key.keysym.sym == SDLK_SPACE) {
-                            const Uint8 *state = SDL_GetKeyboardState(NULL);
-                            char fireDirection = 0;                           
-                            if (state[SDL_SCANCODE_UP]) fireDirection = DIR_UP;
-                            else if (state[SDL_SCANCODE_DOWN]) fireDirection = DIR_DOWN;
-                            else if (state[SDL_SCANCODE_LEFT]) fireDirection = DIR_LEFT;
-                            else if (state[SDL_SCANCODE_RIGHT]) fireDirection = DIR_RIGHT;
-                            
-                            if (fireDirection != 0) {
-                                SendFireCommand(fireDirection);
-                            }
-                        }
-                    }
+    if (event.key.keysym.sym == SDLK_SPACE) {
+        // 現在のキーボード全体の押し下げ状態を取得
+        const Uint8 *state = SDL_GetKeyboardState(NULL);
+        char fireDirection = 0;
+
+        // 同時押しの判定（斜めを優先的にチェック）
+        if (state[SDL_SCANCODE_UP] && state[SDL_SCANCODE_LEFT]) {
+            fireDirection = DIR_UP_LEFT;
+        } else if (state[SDL_SCANCODE_UP] && state[SDL_SCANCODE_RIGHT]) {
+            fireDirection = DIR_UP_RIGHT;
+        } else if (state[SDL_SCANCODE_DOWN] && state[SDL_SCANCODE_LEFT]) {
+            fireDirection = DIR_DOWN_LEFT;
+        } else if (state[SDL_SCANCODE_DOWN] && state[SDL_SCANCODE_RIGHT]) {
+            fireDirection = DIR_DOWN_RIGHT;
+        } else if (state[SDL_SCANCODE_UP]) {
+            fireDirection = DIR_UP;
+        } else if (state[SDL_SCANCODE_DOWN]) {
+            fireDirection = DIR_DOWN;
+        } else if (state[SDL_SCANCODE_LEFT]) {
+            fireDirection = DIR_LEFT;
+        } else if (state[SDL_SCANCODE_RIGHT]) {
+            fireDirection = DIR_RIGHT;
+        }
+        
+        // 方向が決定されていれば弾を発射
+        if (fireDirection != 0) {
+            SendFireCommand(fireDirection);
+        }
+    }
+}
                 }
                 break;
             case SDL_MOUSEBUTTONDOWN:
@@ -843,24 +878,19 @@ void UpdatePlayerPos(int clientID, char direction)
     const int SQ_SIZE = 50;   
 
 
-    // 1. 移動後の新しい座標を計算
-    switch (direction) {
-        case DIR_UP:
-            newY = currentY - step;
-            break;
+    // 1. 方向に応じて新しい座標を計算
 
-        case DIR_DOWN:
-            newY = currentY + step;
-            break;
-
-        case DIR_LEFT:
-            newX = currentX - step;
-            break;
-
-        case DIR_RIGHT:
-            newX = currentX + step;
-            break;
-    }
+switch (direction) {
+    case DIR_UP:    newY = currentY - step; break;
+    case DIR_DOWN:  newY = currentY + step; break;
+    case DIR_LEFT:  newX = currentX - step; break;
+    case DIR_RIGHT: newX = currentX + step; break;
+    /* --- 斜めを追加 --- */
+    case DIR_UP_LEFT:    newY = currentY - step; newX = currentX - step; break;
+    case DIR_UP_RIGHT:   newY = currentY - step; newX = currentX + step; break;
+    case DIR_DOWN_LEFT:  newY = currentY + step; newX = currentX - step; break;
+    case DIR_DOWN_RIGHT: newY = currentY + step; newX = currentX + step; break;
+}
 
 
     // 2. 境界チェックを行い、座標を制限する

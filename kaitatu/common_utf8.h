@@ -42,6 +42,10 @@
 #define DIR_DOWN  'D'
 #define DIR_LEFT  'L'
 #define DIR_RIGHT 'R'
+#define DIR_UP_LEFT    '1'
+#define DIR_UP_RIGHT   '2'
+#define DIR_DOWN_LEFT  '3'
+#define DIR_DOWN_RIGHT '4'
 #define TRANSITION_TIMER_ID 100 /* 画面遷移時の遅延時間（ミリ秒） */
 #define UPDATE_TRAP_COMMAND 0x08 /* サーバーが全クライアントへ罠設置情報を配信 */
 #endif

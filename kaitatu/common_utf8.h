@@ -9,6 +9,16 @@
 #include<assert.h>
 #include<math.h>
 
+typedef struct {
+    int x;
+    int y;
+    int clientID; // 誰が撃ったか
+    int active;   // 1:有効, 0:無効
+    char direction;
+    int distance;  // 飛距離管理用
+} Projectile;
+
+
 #define PORT            (u_short)8888   /* ポート番号 */
 #define MAX_CLIENTS     4               /* クライアント数の最大値 */
 #define MAX_NAME_SIZE   10              /* ユーザー名の最大値*/
@@ -30,14 +40,12 @@
 #define PROJECTILE_STEP 1 
 
 #define MAX_WEAPONS 4 
-#define MAX_STATS_PER_WEAPON 6 // 1つの武器に紐づくステータスの数 (CT, 飛距離, 威力, 体力, 連射数, 移動速度)
+#define MAX_STATS_PER_WEAPON 4 // 1つの武器に紐づくステータスの数 (CT, 飛距離, 威力, 体力, 連射数, 移動速度)
 #define MAX_STAT_NAME_SIZE 32 
-#define STAT_CT_TIME 0
-#define STAT_RANGE 1
-#define STAT_DAMAGE 2
-#define STAT_HP 3
-#define STAT_RATE 4
-#define STAT_SPEED 5
+#define STAT_CT_TIME 0 // クールタイム
+#define STAT_RANGE   1 // 飛距離
+#define STAT_DAMAGE  2 // 威力
+#define STAT_RATE    3 // 連射数（リロードなしで撃てる数）
 #define DIR_UP    'U'
 #define DIR_DOWN  'D'
 #define DIR_LEFT  'L'

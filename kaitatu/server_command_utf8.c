@@ -13,7 +13,6 @@
 #define PLAYER_SIZE 50
 #define SERVER_PROJECTILE_STEP 20
 #define MAX_WEAPONS 4
-#define MAX_STATS_PER_WEAPON 6
 #define STAT_DAMAGE 2 
 
 #define DEFAULT_WINDOW_WIDTH 1300
@@ -35,6 +34,7 @@ typedef struct {
     int firedByClientID;
     int active;
     char direction; 
+    int distance;
 } ServerProjectile;
 
 typedef struct {
@@ -63,12 +63,11 @@ static int GetMaxBulletByWeapon(int weaponID);
 static int CountPlayerBullets(int playerID);
 
 int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
-    { 500,  1000, 10, 100, 3, 20 }, 
-    { 1500, 1500, 30, 120, 1, 5 },
-    { 1000, 1200, 20, 110, 2, 10 }, 
-    { 800,  800,  15, 150, 4, 15 }
+    { 500,  1000, 10, 3 },
+    { 1500, 1500, 30, 1 },
+    { 1000, 1200, 20, 2 },
+    { 800,  800,  15, 4 }
 };
-
 extern CLIENT gClients[MAX_CLIENTS];
 extern int GetClientNum(void);
 
@@ -174,21 +173,19 @@ static int CheckCollision(ServerProjectile *bullet, int playerID) {
 static Uint32 ServerGameLoop(Uint32 interval, void *param) {
     int numClients = GetClientNum();
 
-    // 1. トラップ抽選
+    // 1. トラップ抽選 (既存のまま)
     if (!gTrapActive && rand() % 500 == 0) {
         SpawnTrap();
     }
 
-    // 2. トラップ判定
+    // 2. トラップ判定 (既存のまま)
     if (gTrapActive) {
         for (int i = 0; i < numClients; i++) {
             if (gServerPlayerHP[i] <= 0) continue;
             SDL_Rect playerRect = {gPlayerPosX[i], gPlayerPosY[i], PLAYER_SIZE, PLAYER_SIZE};
-            
             if (SDL_HasIntersection(&playerRect, &gTrapRect)) {
-                int amount = (gTrapType == 0) ? -20 : 30; // ★ 0なら20回復、1なら30ダメージ
-
-                gServerPlayerHP[i] -= amount; // ダメージ(正の値)なら減り、回復(負の値)なら増える
+                int amount = (gTrapType == 0) ? -20 : 30;
+                gServerPlayerHP[i] -= amount;
                 if (gServerPlayerHP[i] > 150) gServerPlayerHP[i] = 150;
                 if (gServerPlayerHP[i] < 0) gServerPlayerHP[i] = 0;
 
@@ -196,40 +193,57 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
                 int ds = 0;
                 SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
                 SetIntData2DataBlock(data, i, &ds);     
-                SetIntData2DataBlock(data, amount, &ds); // クライアントへ通知
+                SetIntData2DataBlock(data, amount, &ds);
                 SendData(ALL_CLIENTS, data, ds);
 
-                printf("[SERVER] Player %d hit Trap Type %d!\n", i, gTrapType);
                 HideTrap(0, NULL);
-                CheckWinnerAndTransition(); // ダメージで死ぬ可能性があるので判定
+                CheckWinnerAndTransition();
                 break; 
             }
         }
     }
 
-    // 3. 弾の処理
+    // 3. 弾の処理 (修正ポイント)
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         if (!gServerProjectiles[i].active) continue;
 
         int sid = gServerProjectiles[i].firedByClientID;
-        int dmg = gServerWeaponStats[gClientWeaponID[sid]][STAT_DAMAGE];
+        int weaponID = gClientWeaponID[sid];
+        
+        // ★ ステータスの取得
+        int dmg = gServerWeaponStats[weaponID][STAT_DAMAGE];
+        int maxRange = gServerWeaponStats[weaponID][STAT_RANGE]; 
+        
         char dir = gServerProjectiles[i].direction;
 
+        // SERVER_PROJECTILE_STEP 分の移動をシミュレート
         for (int k = 0; k < SERVER_PROJECTILE_STEP; k++) {
+            // 座標更新
             if (dir == DIR_UP) gServerProjectiles[i].y--;
             else if (dir == DIR_DOWN) gServerProjectiles[i].y++;
             else if (dir == DIR_LEFT) gServerProjectiles[i].x--;
             else if (dir == DIR_RIGHT) gServerProjectiles[i].x++;
             else if (dir == DIR_UP_LEFT)    { gServerProjectiles[i].y--; gServerProjectiles[i].x--; }
-    else if (dir == DIR_UP_RIGHT)   { gServerProjectiles[i].y--; gServerProjectiles[i].x++; }
-    else if (dir == DIR_DOWN_LEFT)  { gServerProjectiles[i].y++; gServerProjectiles[i].x--; }
-    else if (dir == DIR_DOWN_RIGHT) { gServerProjectiles[i].y++; gServerProjectiles[i].x++; }
+            else if (dir == DIR_UP_RIGHT)   { gServerProjectiles[i].y--; gServerProjectiles[i].x++; }
+            else if (dir == DIR_DOWN_LEFT)  { gServerProjectiles[i].y++; gServerProjectiles[i].x--; }
+            else if (dir == DIR_DOWN_RIGHT) { gServerProjectiles[i].y++; gServerProjectiles[i].x++; }
+
+            // ★ 飛距離をカウント
+            gServerProjectiles[i].distance++;
+
+            // ★ 飛距離チェック
+            if (gServerProjectiles[i].distance >= maxRange) {
+                gServerProjectiles[i].active = 0;
+                break;
+            }
+
+            // 当たり判定
             int hitFound = 0;
             for (int j = 0; j < numClients; j++) {
                 if (j == sid || gServerPlayerHP[j] <= 0) continue;
 
                 if (CheckCollision(&gServerProjectiles[i], j)) {
-                    gServerPlayerHP[j] -= dmg;
+                    gServerPlayerHP[j] -= dmg; // ステータスの威力を適用
                     if (gServerPlayerHP[j] < 0) gServerPlayerHP[j] = 0;
                     
                     unsigned char data[MAX_DATA];
@@ -248,6 +262,7 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
             if (hitFound) break;
         }
 
+        // 画面外判定
         if (gServerProjectiles[i].active) {
             if (gServerProjectiles[i].y < -100 || gServerProjectiles[i].y > 1500 || 
                 gServerProjectiles[i].x < -100 || gServerProjectiles[i].x > 1500) {
@@ -364,8 +379,11 @@ int ExecuteCommand(char command, int pos) {
             RecvCharData(pos, &d);
 
             int weaponID = gClientWeaponID[id];
-            int maxBullet = GetMaxBulletByWeapon(weaponID);
+            
+            // ★ ステータス表から最大連射数(STAT_RATE)を取得
+            int maxBullet = gServerWeaponStats[weaponID][STAT_RATE];
 
+            // 弾数制限のチェック
             if (CountPlayerBullets(id) >= maxBullet) {
                 return endFlag;
             }
@@ -377,16 +395,21 @@ int ExecuteCommand(char command, int pos) {
                     gServerProjectiles[i].firedByClientID = id;
                     gServerProjectiles[i].active = 1;
                     gServerProjectiles[i].direction = d;
+                    
+                    // ★ 重要：飛距離計算用のカウントをリセット
+                    gServerProjectiles[i].distance = 0; 
                     break;
                 }
             }
 
+            // 初回発射時のみゲームループタイマーを開始
             static int ti = 0;
             if (!ti) {
                 SDL_AddTimer(16, ServerGameLoop, NULL);
                 ti = 1;
             }
 
+            // 全クライアントへ弾の生成を通知
             ds = 0;
             SetCharData2DataBlock(data, UPDATE_PROJECTILE_COMMAND, &ds);
             SetIntData2DataBlock(data, id, &ds);

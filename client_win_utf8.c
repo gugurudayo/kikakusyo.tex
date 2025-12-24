@@ -51,6 +51,7 @@ static SDL_Texture *gRedWeaponIconTexture = NULL;    // ID 0 用
 static SDL_Texture *gGreenWeaponIconTexture = NULL;  // ID 3 用
 static TTF_Font *gFontLarge = NULL;
 static TTF_Font *gFontNormal = NULL;
+static TTF_Font *gFontCountdown = NULL;
 static TTF_Font *gFontRank = NULL; 
 static TTF_Font *gFontName = NULL;
 static char gAllClientNames[MAX_CLIENTS][MAX_NAME_SIZE];
@@ -482,11 +483,11 @@ void DrawImageAndText(void){
                 sprintf(countStr, "%d", gCountdownValue);
                 
                 int textW = 0, textH = 0;
-                if (gFontLarge) {
-                    TTF_SizeUTF8(gFontLarge, countStr, &textW, &textH);
-                    // 画面中央に大きく赤色で表示
-                    DrawText_Internal(countStr, (w - textW) / 2, (h - textH) / 2, 255, 0, 0, gFontLarge);
-                }
+                if (gFontCountdown) {
+            TTF_SizeUTF8(gFontCountdown, countStr, &textW, &textH);
+            // ★ 色を 0, 0, 0 (黒) に変更
+            DrawText_Internal(countStr, (w - textW) / 2, (h - textH) / 2, 0, 0, 0, gFontCountdown);
+        }
             } else {
                 gCountdownValue = 0; // 3秒経過で終了
             }
@@ -595,6 +596,8 @@ int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
     // --- フォント読み込み ---
     gFontLarge = TTF_OpenFont(FONT_PATH, 40);
     gFontNormal = TTF_OpenFont(FONT_PATH, 24);
+    
+    gFontCountdown = TTF_OpenFont(FONT_PATH, 200);
     gFontRank = TTF_OpenFont(FONT_PATH, 36);
     gFontName = TTF_OpenFont(FONT_PATH, 36);
     if (!gFontLarge || !gFontNormal) {
@@ -655,6 +658,7 @@ void DestroyWindow(void){
     // TTF_CloseFont を維持
     if (gFontLarge) TTF_CloseFont(gFontLarge);
     if (gFontNormal) TTF_CloseFont(gFontNormal);
+    if (gFontCountdown) TTF_CloseFont(gFontCountdown); 
     if (gFontRank) TTF_CloseFont(gFontRank); 
     if (gResultTexture) SDL_DestroyTexture(gResultTexture);
     if (gBackgroundTexture) SDL_DestroyTexture(gBackgroundTexture);

@@ -1,41 +1,26 @@
-#====================================================
-# 1. 変数定義
-#====================================================
 OBJS1   =       server_main.o server_net.o server_command.o
 OBJS2   =       client_main.o client_net.o client_command.o client_win.o
 TARGET1 =       server
 TARGET2 =       client
 CFLAGS  =       -c -DNDEBUG
-LDFLAGS =       # 必要であればここにリンカオプションを追加（現在の出力にはないため空）
+LDFLAGS =      
 
-#====================================================
-# 2. 汎用コンパイルルール（TAB文字を必ず使用）
-#====================================================
-# 依存ファイル（$<）をオブジェクトファイル（$@）に変換する標準ルール
+
 .c.o:
 	gcc $(CFLAGS) $(@:.o=_utf8.c) -o $@
 
-#====================================================
-# 3. ターゲットとリンク
-#====================================================
 all: $(TARGET1) $(TARGET2)
 
 $(TARGET1):     $(OBJS1)
 	gcc -o $(TARGET1) $(OBJS1) -lm -lSDL2
 
 $(TARGET2):     $(OBJS2)
-	gcc -o $(TARGET2) $(OBJS2) -lm -lSDL2 -lSDL2_image -lSDL2_gfx	-lSDL2_ttf $(LDFLAGS)
 
-#====================================================
-# 4. クリーン
-#====================================================
+	gcc -o $(TARGET2) $(OBJS2) -lm -lSDL2 -lSDL2_image -lSDL2_gfx -lSDL2_ttf -lSDL2_mixer $(LDFLAGS)
+
 clean:
 	rm -f *.o $(TARGET1) $(TARGET2)
 
-#====================================================
-# 5. 依存関係の修正 (すべて *_utf8.c / *_utf8.h に変更)
-#====================================================
-# この修正により、.c.o ルールが *_utf8.c を使ってコンパイルを実行します。
 server_main.o: server_main_utf8.c
 	gcc $(CFLAGS) server_main_utf8.c -o server_main.o
 server_net.o: server_net_utf8.c

@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mixer.h> // ★追加
 #include "common_utf8.h"
 #include "client_func_utf8.h"
 #include <stdio.h>
@@ -22,6 +23,7 @@
 #define BLUE_WEAPON_ICON_IMAGE "862582.png"   // ID 1 用 (青)
 #define RED_WEAPON_ICON_IMAGE "23667746.png"  // ID 0 用 (赤)
 #define GREEN_WEAPON_ICON_IMAGE "1499296.png" // ID 3 用 (緑)
+#define WALL_IMAGE "24139010_m.jpg"  // 壁用の画像
 #define FONT_PATH "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf"
 #define DEFAULT_WINDOW_WIDTH 1300
 #define DEFAULT_WINDOW_HEIGHT 1000
@@ -48,8 +50,10 @@ static SDL_Texture *gYellowWeaponIconTexture = NULL; // ID 2 用
 static SDL_Texture *gBlueWeaponIconTexture = NULL;   // ID 1 用
 static SDL_Texture *gRedWeaponIconTexture = NULL;    // ID 0 用
 static SDL_Texture *gGreenWeaponIconTexture = NULL;  // ID 3 用
+static SDL_Texture *gWallTexture = NULL; // 壁のテクスチャ用
 static TTF_Font *gFontLarge = NULL;
 static TTF_Font *gFontNormal = NULL;
+static TTF_Font *gFontCountdown = NULL;
 static TTF_Font *gFontRank = NULL; 
 static TTF_Font *gFontName = NULL;
 static char gAllClientNames[MAX_CLIENTS][MAX_NAME_SIZE];
@@ -66,6 +70,11 @@ static int gPlayerPosY[MAX_CLIENTS];
 static int gPlayerMoveStep[MAX_CLIENTS]; 
 
 static int gSelectedWeaponID = -1;
+
+static Mix_Chunk *gSoundReady = NULL; // 音声データ用
+static Mix_Chunk *gSoundFire = NULL;  // ★追加: 拳銃を撃つ音
+static int gCountdownValue = -1;      // カウントダウン用 (-1は非表示)
+static Uint32 gCountdownStartTime = 0; // カウントダウン開始時刻
 
 extern int gTrapActive;
 extern int gTrapX;
@@ -399,6 +408,37 @@ void DrawImageAndText(void){
             SDL_RenderFillRect(gMainRenderer, NULL); 
         }
 
+        {
+            int blockCount = 8;
+            int blockSize = 150;
+            int cols = 4;
+            int rows = 2;
+            int cell_w = w / cols;
+            int cell_h = h / rows;
+
+            for (int i = 0; i < blockCount; i++) {
+                int r = i / cols;
+                int c = i % cols;
+
+                SDL_Rect blockRect;
+                blockRect.x = c * cell_w + (cell_w / 2) - (blockSize / 2);
+                blockRect.y = r * cell_h + (cell_h / 2) - (blockSize / 2);
+                blockRect.w = blockSize;
+                blockRect.h = blockSize;
+
+                if (gWallTexture) {
+                    // ★ 画像を描画
+                    SDL_RenderCopy(gMainRenderer, gWallTexture, NULL, &blockRect);
+                } else {
+                    // 画像がない場合のバックアップ（以前のグレー）
+                    SDL_SetRenderDrawColor(gMainRenderer, 100, 100, 100, 255);
+                    SDL_RenderFillRect(gMainRenderer, &blockRect);
+                    SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255);
+                    SDL_RenderDrawRect(gMainRenderer, &blockRect);
+                }
+            }
+        }
+
         if (gTrapActive) {
             SDL_Rect tr = { gTrapX, gTrapY, 80, 80 };
             if (gTrapType == 0) SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 0, 255);
@@ -448,12 +488,11 @@ void DrawImageAndText(void){
 
                     // クールタイム中のみ数値を表示
                     if (elapsed < (Uint32)totalCT) {
-    float remaining = (float)(totalCT - elapsed) / 1000.0f;
-    char ctText[32]; // 16 から 32 に拡張
-    sprintf(ctText, "%.1fs", remaining);
-    DrawText_Internal(ctText, gPlayerPosX[i], gPlayerPosY[i] - 45, 255, 100, 100, gFontNormal);
-}
-                    // Ready（elapsed >= totalCT）の場合は何も描画しない
+                        float remaining = (float)(totalCT - elapsed) / 1000.0f;
+                        char ctText[32]; 
+                        sprintf(ctText, "%.1fs", remaining);
+                        DrawText_Internal(ctText, gPlayerPosX[i], gPlayerPosY[i] - 45, 255, 100, 100, gFontNormal);
+                    }
                 }
             }
 
@@ -463,6 +502,29 @@ void DrawImageAndText(void){
             }
         }
         UpdateAndDrawProjectiles();
+
+        /* ★ カウントダウン表示の追加 ★ */
+        if (gCountdownValue > 0) {
+            Uint32 currentTime = SDL_GetTicks();
+            Uint32 elapsed = currentTime - gCountdownStartTime;
+
+            if (elapsed < 3000) {
+                // 残り秒数を計算 (3, 2, 1)
+                gCountdownValue = 3 - (elapsed / 1000);
+                
+                char countStr[4];
+                sprintf(countStr, "%d", gCountdownValue);
+                
+                int textW = 0, textH = 0;
+                if (gFontCountdown) {
+            TTF_SizeUTF8(gFontCountdown, countStr, &textW, &textH);
+            // ★ 色を 0, 0, 0 (黒) に変更
+            DrawText_Internal(countStr, (w - textW) / 2, (h - textH) / 2, 0, 0, 0, gFontCountdown);
+        }
+            } else {
+                gCountdownValue = 0; // 3秒経過で終了
+            }
+        }
     }
     else if (gCurrentScreenState == SCREEN_STATE_TITLE) {
         /* --- 結果発表画面の描画 --- */
@@ -524,108 +586,108 @@ void DrawImageAndText(void){
     }
     SDL_RenderPresent(gMainRenderer);
 }
-
 SDL_Renderer* GetRenderer(void){ return gMainRenderer; }
 
-int InitWindows(int clientID,int num,char name[][MAX_NAME_SIZE]){
+int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
     int windowW = DEFAULT_WINDOW_WIDTH;
     int windowH = DEFAULT_WINDOW_HEIGHT;
     gMyClientID = clientID;
     gClientCount = num;
-    for(int i=0;i<num;i++)
-    { strncpy(gAllClientNames[i], name[i], MAX_NAME_SIZE-1); 
-        gAllClientNames[i][MAX_NAME_SIZE-1]='\0';
+    for (int i = 0; i < num; i++) {
+        strncpy(gAllClientNames[i], name[i], MAX_NAME_SIZE - 1);
+        gAllClientNames[i][MAX_NAME_SIZE - 1] = '\0';
     }
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0 || !(IMG_Init(IMG_INIT_JPG|IMG_INIT_PNG) & IMG_INIT_JPG)) {
-        fprintf(stderr,"SDL init failed: %s\n", SDL_GetError()); 
+
+    /* --- 1. SDLの初期化に AUDIO を追加 --- */
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0 || 
+        !(IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG) & IMG_INIT_JPG)) {
+        fprintf(stderr, "SDL init failed: %s\n", SDL_GetError());
         return -1;
     }
+
+    /* --- 2. SDL_mixer の初期化 --- */
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+        fprintf(stderr, "SDL_mixer init failed: %s\n", Mix_GetError());
+        // オーディオ初期化失敗でもゲームは続行可能とする場合はリターンしない
+    }
+
+    /* --- 3. 音声ファイルの読み込み --- */
+    gSoundReady = Mix_LoadWAV("銃を構える.mp3");
+    if (gSoundReady == NULL) {
+        fprintf(stderr, "Failed to load sound! SDL_mixer Error: %s\n", Mix_GetError());
+    }
+
+    gSoundFire = Mix_LoadWAV("拳銃を撃つ.mp3");
+    if (gSoundFire == NULL) {
+        fprintf(stderr, "Failed to load fire sound! SDL_mixer Error: %s\n", Mix_GetError());
+    }
+
     if (TTF_Init() == -1) {
         fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
     }
-    
+
+    // --- フォント読み込み ---
     gFontLarge = TTF_OpenFont(FONT_PATH, 40);
     gFontNormal = TTF_OpenFont(FONT_PATH, 24);
-    gFontRank  = TTF_OpenFont(FONT_PATH, 36);
-    gFontName  = TTF_OpenFont(FONT_PATH, 36);
+    
+    gFontCountdown = TTF_OpenFont(FONT_PATH, 200);
+    gFontRank = TTF_OpenFont(FONT_PATH, 36);
+    gFontName = TTF_OpenFont(FONT_PATH, 36);
     if (!gFontLarge || !gFontNormal) {
         fprintf(stderr, "Failed to load font: %s\n", TTF_GetError());
     }
+
+    // --- 画像読み込み（既存通り） ---
     SDL_Surface *bg = IMG_Load(BACKGROUND_IMAGE);
     SDL_Surface *res = IMG_Load(RESULT_IMAGE);
-    SDL_Surface *resBack = IMG_Load(RESULT_BACK_IMAGE); 
-    SDL_Surface *icon_yellow = IMG_Load(YELLOW_WEAPON_ICON_IMAGE); 
-    SDL_Surface *icon_blue = IMG_Load(BLUE_WEAPON_ICON_IMAGE);   
+    SDL_Surface *resBack = IMG_Load(RESULT_BACK_IMAGE);
+    SDL_Surface *icon_yellow = IMG_Load(YELLOW_WEAPON_ICON_IMAGE);
+    SDL_Surface *icon_blue = IMG_Load(BLUE_WEAPON_ICON_IMAGE);
     SDL_Surface *icon_red = IMG_Load(RED_WEAPON_ICON_IMAGE);
-    SDL_Surface *icon_green = IMG_Load(GREEN_WEAPON_ICON_IMAGE); 
-    
+    SDL_Surface *icon_green = IMG_Load(GREEN_WEAPON_ICON_IMAGE);
+    SDL_Surface *wallSurf = IMG_Load("24139010_m.jpg");
     const char *myWindowTitle = gAllClientNames[gMyClientID];
-    gMainWindow = SDL_CreateWindow(myWindowTitle,SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,windowW,windowH,0);
+    gMainWindow = SDL_CreateWindow(myWindowTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, windowW, windowH, 0);
 
     gMainRenderer = SDL_CreateRenderer(gMainWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-    if (bg) { gBackgroundTexture = SDL_CreateTextureFromSurface(gMainRenderer,bg); SDL_FreeSurface(bg); }
-    if (res) { gResultTexture = SDL_CreateTextureFromSurface(gMainRenderer,res); SDL_FreeSurface(res); }
-    if (resBack) { gResultBackTexture = SDL_CreateTextureFromSurface(gMainRenderer,resBack); SDL_FreeSurface(resBack); } 
-    
-    if (icon_yellow) { 
-        gYellowWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_yellow);
-        SDL_FreeSurface(icon_yellow); 
+    // --- テクスチャ作成（既存通り） ---
+    if (bg) { gBackgroundTexture = SDL_CreateTextureFromSurface(gMainRenderer, bg); SDL_FreeSurface(bg); }
+    if (res) { gResultTexture = SDL_CreateTextureFromSurface(gMainRenderer, res); SDL_FreeSurface(res); }
+    if (resBack) { gResultBackTexture = SDL_CreateTextureFromSurface(gMainRenderer, resBack); SDL_FreeSurface(resBack); }
+
+    if (icon_yellow) { gYellowWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_yellow); SDL_FreeSurface(icon_yellow); }
+    if (icon_blue) { gBlueWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_blue); SDL_FreeSurface(icon_blue); }
+    if (icon_red) { gRedWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_red); SDL_FreeSurface(icon_red); }
+    if (icon_green) { gGreenWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_green); SDL_FreeSurface(icon_green); }
+
+    if (wallSurf) {
+        gWallTexture = SDL_CreateTextureFromSurface(gMainRenderer, wallSurf);
+        SDL_FreeSurface(wallSurf);
     } else {
-        fprintf(stderr, "Failed to load yellow weapon icon: %s\n", YELLOW_WEAPON_ICON_IMAGE);
+        fprintf(stderr, "Failed to load wall image: %s\n", IMG_GetError());
     }
-    if (icon_blue) { 
-        gBlueWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_blue);
-        SDL_FreeSurface(icon_blue);
-    } else {
-        fprintf(stderr, "Failed to load blue weapon icon: %s\n", BLUE_WEAPON_ICON_IMAGE);
-    }
-    if (icon_red) { 
-        gRedWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_red);
-        SDL_FreeSurface(icon_red);
-    } else {
-        fprintf(stderr, "Failed to load red weapon icon: %s\n", RED_WEAPON_ICON_IMAGE);
-    }
-    if (icon_green) { 
-        gGreenWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_green);
-        SDL_FreeSurface(icon_green);
-    } else {
-        fprintf(stderr, "Failed to load green weapon icon: %s\n", GREEN_WEAPON_ICON_IMAGE);
-    }
-    
+
     gCurrentScreenState = SCREEN_STATE_LOBBY_WAIT;
-    
+
+    // --- プレイヤー初期位置設定（既存通り） ---
     int w = DEFAULT_WINDOW_WIDTH;
     int h = DEFAULT_WINDOW_HEIGHT;
-    const int SQ_SIZE = 50; 
-    const int PADDING = 50; // 画面端からのマージン
-    const int S_SIZE = SQ_SIZE; // プレイヤーのサイズ
+    const int SQ_SIZE = 50;
+    const int PADDING = 50;
+    const int S_SIZE = SQ_SIZE;
 
-    // 参加人数に基づいた初期位置の計算
     for (int i = 0; i < gClientCount; i++) {
-        gPlayerMoveStep[i] = 10; 
-        
+        gPlayerMoveStep[i] = 10;
         switch (i) {
-            case 0: // 1人目: 左上
-                gPlayerPosX[i] = PADDING;
-                gPlayerPosY[i] = PADDING;
-                break;
-            case 1: // 2人目: 右下
-                gPlayerPosX[i] = w - PADDING - S_SIZE;
-                gPlayerPosY[i] = h - PADDING - S_SIZE;
-                break;
-            case 2: // 3人目: 右上
-                gPlayerPosX[i] = w - PADDING - S_SIZE;
-                gPlayerPosY[i] = PADDING;
-                break;
-            case 3: // 4人目: 左下
-                gPlayerPosX[i] = PADDING;
-                gPlayerPosY[i] = h - PADDING - S_SIZE;
-                break;
+            case 0: gPlayerPosX[i] = PADDING; gPlayerPosY[i] = PADDING; break;
+            case 1: gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = h - PADDING - S_SIZE; break;
+            case 2: gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = PADDING; break;
+            case 3: gPlayerPosX[i] = PADDING; gPlayerPosY[i] = h - PADDING - S_SIZE; break;
         }
-        // HPの初期値設定
-        gPlayerHP[i] = MAX_HP; 
+        gPlayerHP[i] = MAX_HP;
     }
+
     InitProjectiles();
     DrawImageAndText();
     return 0;
@@ -636,6 +698,7 @@ void DestroyWindow(void){
     // TTF_CloseFont を維持
     if (gFontLarge) TTF_CloseFont(gFontLarge);
     if (gFontNormal) TTF_CloseFont(gFontNormal);
+    if (gFontCountdown) TTF_CloseFont(gFontCountdown); 
     if (gFontRank) TTF_CloseFont(gFontRank); 
     if (gResultTexture) SDL_DestroyTexture(gResultTexture);
     if (gBackgroundTexture) SDL_DestroyTexture(gBackgroundTexture);
@@ -646,6 +709,10 @@ void DestroyWindow(void){
     if (gGreenWeaponIconTexture) SDL_DestroyTexture(gGreenWeaponIconTexture); 
     if (gMainRenderer) SDL_DestroyRenderer(gMainRenderer);
     if (gMainWindow) SDL_DestroyWindow(gMainWindow);
+    if (gSoundFire) Mix_FreeChunk(gSoundFire); // ★追加
+    if (gSoundReady) Mix_FreeChunk(gSoundReady);
+    if (gWallTexture) SDL_DestroyTexture(gWallTexture);
+    Mix_CloseAudio();
     // TTF_Quit を維持
     IMG_Quit(); TTF_Quit(); SDL_Quit();
 }
@@ -654,24 +721,28 @@ void DestroyWindow(void){
 void WindowEvent(int num){
     SDL_Event event;
     if (SDL_PollEvent(&event)){
+        
+        /* ★ 追加: カウントダウン中の操作ロック ★ */
+        if (gCurrentScreenState == SCREEN_STATE_RESULT && gCountdownValue > 0) {
+            if (event.type != SDL_QUIT) {
+                return; // 処理を中断して入力を無視
+            }
+        }
+
         switch(event.type){
             case SDL_QUIT:
-                // ウィンドウの閉じるボタンで終了コマンドを送信
                 gXPressedFlags[gMyClientID] = 1;
                 DrawImageAndText();
                 SendEndCommand();
                 break;
+
             case SDL_KEYDOWN:
-                // ロビー待機画面 または 結果画面 で X キー入力を受け付ける
                 if (event.key.keysym.sym == SDLK_x && 
                    (gCurrentScreenState == SCREEN_STATE_LOBBY_WAIT || gCurrentScreenState == SCREEN_STATE_TITLE))
                 {
                     if (gXPressedFlags[gMyClientID] == 0) {
-                        // 自分の準備フラグを立ててサーバに通知する（未押下の場合のみ）
                         gXPressedFlags[gMyClientID] = 1;
                         DrawImageAndText();
-                        
-                        // ★ 修正: 新しい関数で現在の画面状態を送信 ★
                         SendXCommandWithState(gMyClientID, gCurrentScreenState);
                     }
                 }
@@ -683,140 +754,117 @@ void WindowEvent(int num){
                 if (gCurrentScreenState == SCREEN_STATE_RESULT) 
                 {   
                     if (gPlayerHP[gMyClientID] <= 0) {
-        break; 
-    }
+                        break; 
+                    }
 
-    // モード切替キー (Cキー) の処理
-    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_c) {
-        gControlMode = (gControlMode == MODE_MOVE) ? MODE_FIRE : MODE_MOVE;
-        DrawImageAndText(); 
-        break;
-    }
+                    if (event.key.keysym.sym == SDLK_c) {
+                        gControlMode = (gControlMode == MODE_MOVE) ? MODE_FIRE : MODE_MOVE;
+                        DrawImageAndText(); 
+                        break;
+                    }
 
+                    if (gControlMode == MODE_MOVE) {
+                        const Uint8 *keyState = SDL_GetKeyboardState(NULL);
+                        char direction = 0;
+                        if (keyState[SDL_SCANCODE_UP] && keyState[SDL_SCANCODE_LEFT]) direction = DIR_UP_LEFT;
+                        else if (keyState[SDL_SCANCODE_UP] && keyState[SDL_SCANCODE_RIGHT]) direction = DIR_UP_RIGHT;
+                        else if (keyState[SDL_SCANCODE_DOWN] && keyState[SDL_SCANCODE_LEFT]) direction = DIR_DOWN_LEFT;
+                        else if (keyState[SDL_SCANCODE_DOWN] && keyState[SDL_SCANCODE_RIGHT]) direction = DIR_DOWN_RIGHT;
+                        else if (keyState[SDL_SCANCODE_UP]) direction = DIR_UP;
+                        else if (keyState[SDL_SCANCODE_DOWN]) direction = DIR_DOWN;
+                        else if (keyState[SDL_SCANCODE_LEFT]) direction = DIR_LEFT;
+                        else if (keyState[SDL_SCANCODE_RIGHT]) direction = DIR_RIGHT;
 
-// --- 移動モードの処理 (gControlMode == MODE_MOVE) ---
-if (gControlMode == MODE_MOVE) {
-    const Uint8 *keyState = SDL_GetKeyboardState(NULL);
-    char direction = 0;
+                        if (direction != 0) {
+                            unsigned char data[MAX_DATA];
+                            int dataSize = 0;
+                            SetCharData2DataBlock(data, MOVE_COMMAND, &dataSize);
+                            SetCharData2DataBlock(data, direction, &dataSize);
+                            SendData(data, dataSize);
+                        }
+                    }
+                    else if (gControlMode == MODE_FIRE) {
+                        if (event.key.keysym.sym == SDLK_SPACE) {
+                            Uint32 currentTime = SDL_GetTicks();
+                            int weaponID = gSelectedWeaponID;
+                            if (weaponID < 0) weaponID = 0;
 
-    // 同時押しの判定
-    if (keyState[SDL_SCANCODE_UP] && keyState[SDL_SCANCODE_LEFT]) {
-        direction = DIR_UP_LEFT;
-    } else if (keyState[SDL_SCANCODE_UP] && keyState[SDL_SCANCODE_RIGHT]) {
-        direction = DIR_UP_RIGHT;
-    } else if (keyState[SDL_SCANCODE_DOWN] && keyState[SDL_SCANCODE_LEFT]) {
-        direction = DIR_DOWN_LEFT;
-    } else if (keyState[SDL_SCANCODE_DOWN] && keyState[SDL_SCANCODE_RIGHT]) {
-        direction = DIR_DOWN_RIGHT;
-    } else if (keyState[SDL_SCANCODE_UP]) {
-        direction = DIR_UP;
-    } else if (keyState[SDL_SCANCODE_DOWN]) {
-        direction = DIR_DOWN;
-    } else if (keyState[SDL_SCANCODE_LEFT]) {
-        direction = DIR_LEFT;
-    } else if (keyState[SDL_SCANCODE_RIGHT]) {
-        direction = DIR_RIGHT;
-    }
+                            int ct = gWeaponStats[weaponID][STAT_CT_TIME];
+                            int maxRate = gWeaponStats[weaponID][STAT_RATE];
 
-    // 方向が決定された場合のみ送信
-    if (direction != 0) {
-        unsigned char data[MAX_DATA];
-        int dataSize = 0;
-        SetCharData2DataBlock(data, MOVE_COMMAND, &dataSize);
-        SetCharData2DataBlock(data, direction, &dataSize);
-        SendData(data, dataSize);
-    }
-}
-                    // --- 発射モードの処理 (gControlMode == MODE_FIRE) ---
-// --- 発射モードの処理 (gControlMode == MODE_FIRE) ---
-else if (gControlMode == MODE_FIRE) {
-    if (event.key.keysym.sym == SDLK_SPACE) {
-        Uint32 currentTime = SDL_GetTicks();
-        int weaponID = gSelectedWeaponID;
+                            if (currentTime - gLastFireTime >= (Uint32)ct) {
+                                int myBulletCount = 0;
+                                for (int i = 0; i < MAX_PROJECTILES; i++) {
+                                    if (gProjectiles[i].active && gProjectiles[i].clientID == gMyClientID) {
+                                        myBulletCount++;
+                                    }
+                                }
 
-        // 武器が未選択の場合はデフォルト(0)を参照
-        if (weaponID < 0) weaponID = 0;
-
-        int ct = gWeaponStats[weaponID][STAT_CT_TIME]; // ステータスからCT取得
-        int maxRate = gWeaponStats[weaponID][STAT_RATE]; // ステータスから最大連射数取得
-
-        // 1. クールタイムのチェック
-        if (currentTime - gLastFireTime >= (Uint32)ct) {
-            
-            // 2. 画面内の自分の弾数をカウント
-            int myBulletCount = 0;
-            for (int i = 0; i < MAX_PROJECTILES; i++) {
-                if (gProjectiles[i].active && gProjectiles[i].clientID == gMyClientID) {
-                    myBulletCount++;
-                }
-            }
-
-            // 3. 連射数のチェック
-            if (myBulletCount < maxRate) {
-                const Uint8 *state = SDL_GetKeyboardState(NULL);
-                char fireDirection = 0;
-
-                // 方向判定（既存ロジック）
-                if (state[SDL_SCANCODE_UP] && state[SDL_SCANCODE_LEFT]) fireDirection = DIR_UP_LEFT;
-                else if (state[SDL_SCANCODE_UP] && state[SDL_SCANCODE_RIGHT]) fireDirection = DIR_UP_RIGHT;
-                else if (state[SDL_SCANCODE_DOWN] && state[SDL_SCANCODE_LEFT]) fireDirection = DIR_DOWN_LEFT;
-                else if (state[SDL_SCANCODE_DOWN] && state[SDL_SCANCODE_RIGHT]) fireDirection = DIR_DOWN_RIGHT;
-                else if (state[SDL_SCANCODE_UP]) fireDirection = DIR_UP;
-                else if (state[SDL_SCANCODE_DOWN]) fireDirection = DIR_DOWN;
-                else if (state[SDL_SCANCODE_LEFT]) fireDirection = DIR_LEFT;
-                else if (state[SDL_SCANCODE_RIGHT]) fireDirection = DIR_RIGHT;
-                
-                if (fireDirection != 0) {
-                    SendFireCommand(fireDirection);
-                    gLastFireTime = currentTime; // ★発射時刻を更新
-                }
-            }
-        }
-    }
-}
+                                if (myBulletCount < maxRate) {
+                                    const Uint8 *state = SDL_GetKeyboardState(NULL);
+                                    char fireDirection = 0;
+                                    if (state[SDL_SCANCODE_UP] && state[SDL_SCANCODE_LEFT]) fireDirection = DIR_UP_LEFT;
+                                    else if (state[SDL_SCANCODE_UP] && state[SDL_SCANCODE_RIGHT]) fireDirection = DIR_UP_RIGHT;
+                                    else if (state[SDL_SCANCODE_DOWN] && state[SDL_SCANCODE_LEFT]) fireDirection = DIR_DOWN_LEFT;
+                                    else if (state[SDL_SCANCODE_DOWN] && state[SDL_SCANCODE_RIGHT]) fireDirection = DIR_DOWN_RIGHT;
+                                    else if (state[SDL_SCANCODE_UP]) fireDirection = DIR_UP;
+                                    else if (state[SDL_SCANCODE_DOWN]) fireDirection = DIR_DOWN;
+                                    else if (state[SDL_SCANCODE_LEFT]) fireDirection = DIR_LEFT;
+                                    else if (state[SDL_SCANCODE_RIGHT]) fireDirection = DIR_RIGHT;
+                                    
+                                    if (fireDirection != 0) {
+                                        SendFireCommand(fireDirection);
+                                        gLastFireTime = currentTime;
+                                        if (gSoundFire != NULL) {
+                                            Mix_PlayChannel(-1, gSoundFire, 0);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 break;
+
             case SDL_MOUSEBUTTONDOWN:
                 if (gCurrentScreenState == SCREEN_STATE_GAME_SCREEN){
-                    // 武器選択画面でのマウスクリック処理
                     int x = event.button.x;
                     int y = event.button.y;
-                    int w, h;
-                    SDL_GetWindowSize(gMainWindow, &w, &h);
+                    int win_w, win_h;
+                    SDL_GetWindowSize(gMainWindow, &win_w, &win_h);
                     const int P = 20, Y_OFF = 50;
-                    int rectW = (w - P*4)/2;
-                    int rectH = (h - P*7)/2;
-                    int leftX = (w - (rectW*2 + P))/2;
+                    int rectW = (win_w - P*4)/2;
+                    int rectH = (win_h - P*7)/2;
+                    int leftX = (win_w - (rectW*2 + P))/2;
                     int rightX = leftX + rectW + P;
-                    int topY = (h - (rectH*2 + P))/2 + Y_OFF;
+                    int topY = (win_h - (rectH*2 + P))/2 + Y_OFF;
                     int bottomY = topY + rectH + P;
-                    int selectedID = -1;        
-                    // クリックされた位置から武器IDを判定
+                    int selectedID = -1;
+
                     if (x >= leftX && x < leftX + rectW){
-                        if (y >= topY && y < topY + rectH) selectedID = 0; // 左上
-                        else if (y >= bottomY && y < bottomY + rectH) selectedID = 2; // 左下
+                        if (y >= topY && y < topY + rectH) selectedID = 0;
+                        else if (y >= bottomY && y < bottomY + rectH) selectedID = 2;
                     } else if (x >= rightX && x < rightX + rectW){
-                        if (y >= topY && y < topY + rectH) selectedID = 1; // 右上
-                        else if (y >= bottomY && y < bottomY + rectH) selectedID = 3; // 右下
+                        if (y >= topY && y < topY + rectH) selectedID = 1;
+                        else if (y >= bottomY && y < bottomY + rectH) selectedID = 3;
                     }
+
                     if (selectedID != -1 && gWeaponSent == 0){
-                          gSelectedWeaponID = selectedID;
-                        DrawImageAndText(); // ★ クリック直後に見た目更新
+                        gSelectedWeaponID = selectedID;
+                        DrawImageAndText();
                         unsigned char data[MAX_DATA];
                         int dataSize = 0;
                         SetCharData2DataBlock(data, SELECT_WEAPON_COMMAND, &dataSize);
-                        SetIntData2DataBlock(data, selectedID, &dataSize); // 武器IDを情報として送信
+                        SetIntData2DataBlock(data, selectedID, &dataSize);
                         SendData(data, dataSize);
-                        gWeaponSent = 1; // 選択済みフラグを立てる
+                        gWeaponSent = 1;
                     }
                 }
                 break;
+
             case SDL_USEREVENT:
-                // タイマーなど別スレッドからの画面切替要求をメインスレッドで実行
                 {
                     int reqState = (int)(intptr_t)event.user.data1;
-                    printf("[DEBUG] Received USEREVENT -> SetScreenState: %d\n", reqState);
-                    fflush(stdout);
                     SetScreenState(reqState);
                 }
                 break;
@@ -824,8 +872,7 @@ else if (gControlMode == MODE_FIRE) {
     }   
 }
 
-void SetPlayerMoveStep(int clientID, int step) 
-{
+void SetPlayerMoveStep(int clientID, int step) {
     if (clientID < 0 || clientID >= MAX_CLIENTS) return;
     gPlayerMoveStep[clientID] = step;
 }
@@ -837,108 +884,84 @@ void SetXPressedFlag(int clientID){
 }
 
 void SetScreenState(int state){
-     printf("[DEBUG] SetScreenState: state=%d\n", state);
     gCurrentScreenState = state;  
     if (state == SCREEN_STATE_GAME_SCREEN) {
-        // ゲーム画面への遷移時、武器選択フラグをリセット
         gWeaponSent = 0;
         gSelectedWeaponID = -1;
     } else if (state == SCREEN_STATE_LOBBY_WAIT) {
-        // ロビー待機画面への遷移時、全員のX押下状態をリセット
         memset(gXPressedFlags, 0, sizeof(gXPressedFlags));
     }
     else if (state == SCREEN_STATE_RESULT) {
-         printf("[DEBUG] RESULT state - timer will be set\n");
+        if (gSoundReady != NULL) {
+            Mix_PlayChannel(-1, gSoundReady, 0);
+        }
+        gCountdownValue = 3;
+        gCountdownStartTime = SDL_GetTicks();
+        gLastFireTime = SDL_GetTicks(); 
     } 
-  
     else if (state == SCREEN_STATE_TITLE) {
-        printf("[DEBUG] TITLE state - reset X flags\n");
         memset(gXPressedFlags, 0, sizeof(gXPressedFlags));
     }
-    
     DrawImageAndText(); 
-    // 結果画面表示時にタイマーを設定
-    if (state == SCREEN_STATE_RESULT) {
-        printf("[DEBUG] Battle started. Waiting for winner...\n");
-        // タイマー設定を削除
-    }
 }
 
-// プレイヤーの座標を更新するヘルパー関数（境界チェックを追加）
-// プレイヤーの座標を更新するヘルパー関数（境界チェック ＋ プレイヤー同士の衝突判定）
-void UpdatePlayerPos(int clientID, char direction)
-{
+void UpdatePlayerPos(int clientID, char direction) {
     if (clientID < 0 || clientID >= MAX_CLIENTS) return;
-
-
     int step = gPlayerMoveStep[clientID];
     int currentX = gPlayerPosX[clientID];
     int currentY = gPlayerPosY[clientID];
-
     int newX = currentX;
     int newY = currentY;
 
     int windowW, windowH;
     SDL_GetWindowSize(gMainWindow, &windowW, &windowH);
-
-
-    // プレイヤーのサイズ（50x50）
     const int SQ_SIZE = 50;   
 
-
-    // 1. 方向に応じて新しい座標を計算
-
-switch (direction) {
-    case DIR_UP:    newY = currentY - step; break;
-    case DIR_DOWN:  newY = currentY + step; break;
-    case DIR_LEFT:  newX = currentX - step; break;
-    case DIR_RIGHT: newX = currentX + step; break;
-    /* --- 斜めを追加 --- */
-    case DIR_UP_LEFT:    newY = currentY - step; newX = currentX - step; break;
-    case DIR_UP_RIGHT:   newY = currentY - step; newX = currentX + step; break;
-    case DIR_DOWN_LEFT:  newY = currentY + step; newX = currentX - step; break;
-    case DIR_DOWN_RIGHT: newY = currentY + step; newX = currentX + step; break;
-}
-
-
-    // 2. 境界チェックを行い、座標を制限する
-    if (newX < 0) {
-        newX = 0; 
-    } else if (newX > windowW - SQ_SIZE) {
-        newX = windowW - SQ_SIZE; 
+    switch (direction) {
+        case DIR_UP:    newY = currentY - step; break;
+        case DIR_DOWN:  newY = currentY + step; break;
+        case DIR_LEFT:  newX = currentX - step; break;
+        case DIR_RIGHT: newX = currentX + step; break;
+        case DIR_UP_LEFT:    newY = currentY - step; newX = currentX - step; break;
+        case DIR_UP_RIGHT:   newY = currentY - step; newX = currentX + step; break;
+        case DIR_DOWN_LEFT:  newY = currentY + step; newX = currentX - step; break;
+        case DIR_DOWN_RIGHT: newY = currentY + step; newX = currentX + step; break;
     }
 
-    if (newY < 0) {
-        newY = 0; 
-    } else if (newY > windowH - SQ_SIZE) {
-        newY = windowH - SQ_SIZE; 
+    if (newX < 0) newX = 0; 
+    else if (newX > windowW - SQ_SIZE) newX = windowW - SQ_SIZE; 
+    if (newY < 0) newY = 0; 
+    else if (newY > windowH - SQ_SIZE) newY = windowH - SQ_SIZE; 
+    {
+        int blockCount = 8;
+        int blockSize = 150;
+        int cols = 4;
+        int rows = 2;
+        int cell_w = windowW / cols;
+        int cell_h = windowH / rows;
+
+        SDL_Rect nextRect = { newX, newY, SQ_SIZE, SQ_SIZE };
+
+        for (int i = 0; i < blockCount; i++) {
+            SDL_Rect blockRect;
+            blockRect.x = (i % cols) * cell_w + (cell_w / 2) - (blockSize / 2);
+            blockRect.y = (i / cols) * cell_h + (cell_h / 2) - (blockSize / 2);
+            blockRect.w = blockSize;
+            blockRect.h = blockSize;
+
+            // ★ ここで描画してはいけません！当たり判定だけ行います
+            if (SDL_HasIntersection(&nextRect, &blockRect)) {
+                return; // 衝突したので移動させない
+            }
+        }
     }
-
-
-    // 3. プレイヤー同士の衝突判定（追加部分）
-    // 自分の移動後の位置を矩形(Rect)として定義
     SDL_Rect myNextRect = { newX, newY, SQ_SIZE, SQ_SIZE };
-
     for (int i = 0; i < gClientCount; i++) {
-        
-        // 自分自身、または死亡しているプレイヤーは判定から除外
-        if (i == clientID || gPlayerHP[i] <= 0) {
-            continue;
-        }
-
-        // 相手プレイヤーの現在の位置を矩形として定義
+        if (i == clientID || gPlayerHP[i] <= 0) continue;
         SDL_Rect otherRect = { gPlayerPosX[i], gPlayerPosY[i], SQ_SIZE, SQ_SIZE };
-
-        // SDLの標準関数を使って矩形同士の重なり（衝突）をチェック
-        if (SDL_HasIntersection(&myNextRect, &otherRect)) {
-            
-            // 衝突している場合は、座標を更新せずにこの関数を抜ける（移動をキャンセル）
-            return; 
-        }
+        if (SDL_HasIntersection(&myNextRect, &otherRect)) return; 
     }
 
-
-    // 4. 衝突がなければ、最終的な座標を更新
     gPlayerPosX[clientID] = newX;
     gPlayerPosY[clientID] = newY;
 }

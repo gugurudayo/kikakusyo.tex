@@ -18,7 +18,9 @@ typedef struct {
     int distance;  // 飛距離管理用
 } Projectile;
 
-
+/* common_utf8.h に追記 */
+#define BLOCK_COUNT 8
+#define BLOCK_SIZE  150
 #define PORT            (u_short)8888   /* ポート番号 */
 #define MAX_CLIENTS     4               /* クライアント数の最大値 */
 #define MAX_NAME_SIZE   10              /* ユーザー名の最大値*/

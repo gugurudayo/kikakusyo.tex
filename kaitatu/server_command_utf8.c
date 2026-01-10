@@ -97,14 +97,44 @@ static Uint32 HideTrap(Uint32 interval, void *param) {
 }
 
 // トラップを出現させる処理
+// トラップを出現させる処理
 void SpawnTrap(void) {
     if (gTrapActive) return;
 
-    // 画面端から 80px 以上内側に出現させるように調整
-    gTrapRect.x = rand() % (DEFAULT_WINDOW_WIDTH - 200) + 100;
-    gTrapRect.y = rand() % (DEFAULT_WINDOW_HEIGHT - 200) + 100;
+    int overlap;
+    int screenW = 1300; // DEFAULT_WINDOW_WIDTH
+    int screenH = 1000; // DEFAULT_WINDOW_HEIGHT
+    int blockCols = 4;
+    int blockRows = 2;
+    int cellW = screenW / blockCols;
+    int cellH = screenH / blockRows;
+    int blockSize = 150; // 壁のサイズ
+
+    do {
+        overlap = 0;
+        // 1. ランダムに座標を決定
+        gTrapRect.x = rand() % (screenW - 200) + 100;
+        gTrapRect.y = rand() % (screenH - 200) + 100;
+
+        // 2. 8つの壁（正方形）との重なりチェック
+        for (int i = 0; i < 8; i++) {
+            int bx = (i % blockCols) * cellW + (cellW / 2) - (blockSize / 2);
+            int by = (i / blockCols) * cellH + (cellH / 2) - (blockSize / 2);
+
+            SDL_Rect blockRect = {bx, by, blockSize, blockSize};
+            
+            // SDL_HasIntersection を使ってトラップと壁が重なっているか判定
+            if (SDL_HasIntersection(&gTrapRect, &blockRect)) {
+                overlap = 1; // 重なったのでやり直し
+                break;
+            }
+        }
+        // 重なっている間はループ（再抽選）を繰り返す
+    } while (overlap);
+
+    // 確定した座標でトラップを有効化
     gTrapActive = 1;
-    gTrapType = rand() % 2; // ★追加 0 か 1 をランダムで決定
+    gTrapType = rand() % 2; 
 
     unsigned char data[MAX_DATA];
     int ds = 0;
@@ -112,7 +142,7 @@ void SpawnTrap(void) {
     SetIntData2DataBlock(data, 1, &ds);           
     SetIntData2DataBlock(data, gTrapRect.x, &ds); 
     SetIntData2DataBlock(data, gTrapRect.y, &ds); 
-    SetIntData2DataBlock(data, gTrapType, &ds); // ★追加 タイプを送信
+    SetIntData2DataBlock(data, gTrapType, &ds); 
     SendData(ALL_CLIENTS, data, ds);
 
     SDL_AddTimer(5000, HideTrap, NULL);
@@ -230,7 +260,7 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
 
             // ★ 飛距離をカウント
             gServerProjectiles[i].distance++;
-
+            
             // ★ 飛距離チェック
             if (gServerProjectiles[i].distance >= maxRange) {
                 gServerProjectiles[i].active = 0;
@@ -348,27 +378,75 @@ int ExecuteCommand(char command, int pos) {
         }
 
         case MOVE_COMMAND: {
-    char d;
-    RecvCharData(pos, &d);
-    
-    int step = 10; 
-    if (d == DIR_UP) { gPlayerPosY[pos] -= step; }
-    else if (d == DIR_DOWN) { gPlayerPosY[pos] += step; }
-    else if (d == DIR_LEFT) { gPlayerPosX[pos] -= step; }
-    else if (d == DIR_RIGHT) { gPlayerPosX[pos] += step; }
-    /* --- 斜め移動の座標更新を追加 --- */
-    else if (d == DIR_UP_LEFT)    { gPlayerPosY[pos] -= step; gPlayerPosX[pos] -= step; }
-    else if (d == DIR_UP_RIGHT)   { gPlayerPosY[pos] -= step; gPlayerPosX[pos] += step; }
-    else if (d == DIR_DOWN_LEFT)  { gPlayerPosY[pos] += step; gPlayerPosX[pos] -= step; }
-    else if (d == DIR_DOWN_RIGHT) { gPlayerPosY[pos] += step; gPlayerPosX[pos] += step; }
+            char d;
+            RecvCharData(pos, &d);
+            
+            int step = 10; 
+            int nextX = gPlayerPosX[pos];
+            int nextY = gPlayerPosY[pos];
 
-    ds = 0;
-    SetCharData2DataBlock(data, UPDATE_MOVE_COMMAND, &ds);
-    SetIntData2DataBlock(data, pos, &ds);
-    SetCharData2DataBlock(data, d, &ds);
-    SendData(ALL_CLIENTS, data, ds);
-    break;
-}
+            // 1. 移動後の暫定座標を計算
+            if (d == DIR_UP)         { nextY -= step; }
+            else if (d == DIR_DOWN)  { nextY += step; }
+            else if (d == DIR_LEFT)  { nextX -= step; }
+            else if (d == DIR_RIGHT) { nextX += step; }
+            else if (d == DIR_UP_LEFT)    { nextY -= step; nextX -= step; }
+            else if (d == DIR_UP_RIGHT)   { nextY -= step; nextX += step; }
+            else if (d == DIR_DOWN_LEFT)  { nextY += step; nextX -= step; }
+            else if (d == DIR_DOWN_RIGHT) { nextY += step; nextX += step; }
+
+            // 2. 8つの正方形（壁）との当たり判定
+            int canMove = 1;
+            
+            // クライアントの描画(client_win_utf8.c)と完全に一致させる定数
+            int screenW = 1300; // DEFAULT_WINDOW_WIDTH
+            int screenH = 1000; // DEFAULT_WINDOW_HEIGHT
+            int cols = 4;
+            int rows = 2;
+            int cell_w = screenW / cols;
+            int cell_h = screenH / rows;
+            int bSize = 150; // BLOCK_SIZE
+            int pSize = 50;  // PLAYER_SIZE (SQ_SIZE)
+
+            for (int i = 0; i < 8; i++) {
+                int r = i / cols;
+                int c = i % cols;
+                
+                // 正方形の左上座標を計算（描画ロジックと同一）
+                int bx = c * cell_w + (cell_w / 2) - (bSize / 2);
+                int by = r * cell_h + (cell_h / 2) - (bSize / 2);
+
+                // AABB衝突判定（プレイヤーが正方形の範囲に少しでも重なったら衝突）
+                if (nextX < bx + bSize &&
+                    nextX + pSize > bx &&
+                    nextY < by + bSize &&
+                    nextY + pSize > by) {
+                    canMove = 0; 
+                    // printf("[DEBUG] Collision with block %d at (%d, %d)\n", i, bx, by);
+                    break;
+                }
+            }
+
+            // 3. 画面外（ウィンドウ端）の判定も追加（念のため）
+            if (nextX < 0 || nextX + pSize > screenW || nextY < 0 || nextY + pSize > screenH) {
+                canMove = 0;
+            }
+
+            // 4. 壁に当たっていなければ座標を更新
+            if (canMove) {
+                gPlayerPosX[pos] = nextX;
+                gPlayerPosY[pos] = nextY;
+            }
+
+            // 5. 全クライアントへ現在の確定座標を通知
+            // 注意：当たって動けなかった場合も、現在の座標を送ることでクライアント側の位置を補正します
+            ds = 0;
+            SetCharData2DataBlock(data, UPDATE_MOVE_COMMAND, &ds);
+            SetIntData2DataBlock(data, pos, &ds);
+            SetCharData2DataBlock(data, d, &ds);
+            SendData(ALL_CLIENTS, data, ds);
+            break;
+        }
 
         case FIRE_COMMAND: {
             int id, x, y;

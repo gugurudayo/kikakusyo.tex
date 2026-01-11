@@ -16,11 +16,14 @@ int main(int argc,char *argv[])
         fprintf(stderr,"Usage: number of clients\n");
         exit(-1);
     }
-    if((num = atoi(argv[1])) < 0 ||  num > MAX_CLIENTS){
-        fprintf(stderr,"clients limit = %d \n",MAX_CLIENTS);
+
+    num = atoi(argv[1]);
+
+    if(num < 2 || num > 4)
+    {
+        printf("その人数ではプレイ不可です。\n");
         exit(-1);
     }
-    
     /* SDLの初期化 */
     if(SDL_Init(SDL_INIT_TIMER) < 0) {
         printf("failed to initialize SDL.\n");
@@ -46,7 +49,8 @@ int main(int argc,char *argv[])
                 break;
             }
         }
-        if (endFlag == 0) break;
+        if (endFlag == 0) 
+        break;
         
         endFlag = SendRecvManager();
     };

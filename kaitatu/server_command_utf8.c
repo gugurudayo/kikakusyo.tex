@@ -53,37 +53,9 @@ static ServerProjectile gServerProjectiles[MAX_PROJECTILES];
 static int gClientWeaponID[MAX_CLIENTS]; 
 static int gServerInitialized = 0;
 
-static int gTrapActive = 0;   /* legacy (unused) */
-
-#define TRAP_SIZE 80
-#define TRAP_LIFETIME_MS 10000           // 罠の表示時間
-#define TRAP_SPAWN_INTERVAL_MS 5000     // ぽこぽこ出す間隔（ms）
-#define MAX_TRAPS 3
-
-typedef struct {
-    int active;
-    int type;
-    SDL_Rect rect;
-    Uint32 expireAt;
-} ServerTrap;
-
-static ServerTrap gTraps[MAX_TRAPS];
-static Uint32 gNextTrapSpawnAt = 0; 
-
-// ★追加: 毒トラップ(紫)の継続ダメージ管理
-#define POISON_TICKS 30             // 30秒継続
-#define POISON_DMG_PER_TICK 1      // 1秒ごとに1ダメージ
-#define POISON_INTERVAL_MS 1000     // 何msごとにダメージを入れるか
-static int gPoisonRemain[MAX_CLIENTS] = {0};
-static Uint32 gPoisonNextTick[MAX_CLIENTS] = {0};
-
-// ★追加: 温泉(回復)トラップの継続回復(HoT)
-#define HOTSPRING_TICKS 30         // 30秒継続
-#define HOTSPRING_HEAL_PER_TICK 1 // 1秒ごとに1回復
-#define HOTSPRING_INTERVAL_MS 1000 // 何msごとに回復するか
-static int gHotspringRemain[MAX_CLIENTS] = {0};
-static Uint32 gHotspringNextTick[MAX_CLIENTS] = {0};
-
+static int gTrapActive = 0;   
+static int gTrapType = 0;     // ★追加 0:回復(黄), 1:ダメージ(赤)
+static SDL_Rect gTrapRect = {0, 0, 80, 80}; 
 
 int gPlayerPosX[MAX_CLIENTS] = {0}; 
 int gPlayerPosY[MAX_CLIENTS] = {0};
@@ -91,15 +63,14 @@ static int GetMaxBulletByWeapon(int weaponID);
 static int CountPlayerBullets(int playerID);
 
 int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
-    { 500,  1000, 10, 3 },
-    { 1500, 1500, 30, 1 },
-    { 1000, 1200, 20, 2 },
-    { 800,  800,  15, 4 }
+    { 1000, 400, 10},
+    { 600, 1000, 40},
+    { 800, 1200, 40},
+    { 400,  300, 20}
 };
 extern CLIENT gClients[MAX_CLIENTS];
 extern int GetClientNum(void);
 
-/* ヘルパー関数群 */
 static void SetIntData2DataBlock(void *data, int intData, int *dataSize) {
     int tmp = htonl(intData);
     memcpy((char*)data + (*dataSize), &tmp, sizeof(int));
@@ -111,36 +82,23 @@ static void SetCharData2DataBlock(void *data, char charData, int *dataSize) {
     (*dataSize) += sizeof(char);
 }
 
-/* ★ Trap (multi) helpers ★ */
+/* ★ 解決1: HideTrap と SpawnTrap を呼び出し元より前に定義する ★ */
 
-static void SendTrapUpdate(int active, int trapId, int x, int y, int type) {
+// トラップを消す処理
+static Uint32 HideTrap(Uint32 interval, void *param) {
+    gTrapActive = 0;
     unsigned char data[MAX_DATA];
     int ds = 0;
     SetCharData2DataBlock(data, UPDATE_TRAP_COMMAND, &ds);
-    SetIntData2DataBlock(data, active, &ds);
-    SetIntData2DataBlock(data, trapId, &ds);
-    if (active) {
-        SetIntData2DataBlock(data, x, &ds);
-        SetIntData2DataBlock(data, y, &ds);
-        SetIntData2DataBlock(data, type, &ds);
-    }
+    SetIntData2DataBlock(data, 0, &ds); // 0 = 非表示
     SendData(ALL_CLIENTS, data, ds);
+    return 0;
 }
 
-static void DespawnTrap(int trapId) {
-    if (trapId < 0 || trapId >= MAX_TRAPS) return;
-    if (!gTraps[trapId].active) return;
-    gTraps[trapId].active = 0;
-    SendTrapUpdate(0, trapId, 0, 0, 0);
-}
-
-static int SpawnTrap(void) {
-    // 空きスロットを探す
-    int slot = -1;
-    for (int i = 0; i < MAX_TRAPS; i++) {
-        if (!gTraps[i].active) { slot = i; break; }
-    }
-    if (slot < 0) return -1;
+// トラップを出現させる処理
+// トラップを出現させる処理
+void SpawnTrap(void) {
+    if (gTrapActive) return;
 
     int overlap;
     int screenW = 1300; // DEFAULT_WINDOW_WIDTH
@@ -151,43 +109,44 @@ static int SpawnTrap(void) {
     int cellH = screenH / blockRows;
     int blockSize = 150; // 壁のサイズ
 
-    SDL_Rect tr = {0, 0, TRAP_SIZE, TRAP_SIZE};
-
-    // 壁＆他トラップとの重なり回避
-    int tries = 0;
     do {
         overlap = 0;
-        tr.x = rand() % (screenW - 200) + 100;
-        tr.y = rand() % (screenH - 200) + 100;
+        // 1. ランダムに座標を決定
+        gTrapRect.x = rand() % (screenW - 200) + 100;
+        gTrapRect.y = rand() % (screenH - 200) + 100;
 
-        // 壁との重なり
+        // 2. 8つの壁（正方形）との重なりチェック
         for (int i = 0; i < 8; i++) {
             int bx = (i % blockCols) * cellW + (cellW / 2) - (blockSize / 2);
             int by = (i / blockCols) * cellH + (cellH / 2) - (blockSize / 2);
-            SDL_Rect blockRect = {bx, by, blockSize, blockSize};
-            if (SDL_HasIntersection(&tr, &blockRect)) { overlap = 1; break; }
-        }
 
-        // 他のトラップと重なりすぎない（完全にNGにすると詰まるので、軽く回避）
-        if (!overlap) {
-            for (int i = 0; i < MAX_TRAPS; i++) {
-                if (!gTraps[i].active) continue;
-                if (SDL_HasIntersection(&tr, &gTraps[i].rect)) { overlap = 1; break; }
+            SDL_Rect blockRect = {bx, by, blockSize, blockSize};
+            
+            // SDL_HasIntersection を使ってトラップと壁が重なっているか判定
+            if (SDL_HasIntersection(&gTrapRect, &blockRect)) {
+                overlap = 1; // 重なったのでやり直し
+                break;
             }
         }
-
-        tries++;
-        if (tries > 50) break; // これ以上は妥協
+        // 重なっている間はループ（再抽選）を繰り返す
     } while (overlap);
 
-    gTraps[slot].active = 1;
-    gTraps[slot].type = rand() % 4;  // 0..3
-    gTraps[slot].rect = tr;
-    gTraps[slot].expireAt = SDL_GetTicks() + TRAP_LIFETIME_MS;
+    // 確定した座標でトラップを有効化
+    gTrapActive = 1;
+    gTrapType = rand() % 2; 
 
-    SendTrapUpdate(1, slot, tr.x, tr.y, gTraps[slot].type);
-    return slot;
+    unsigned char data[MAX_DATA];
+    int ds = 0;
+    SetCharData2DataBlock(data, UPDATE_TRAP_COMMAND, &ds);
+    SetIntData2DataBlock(data, 1, &ds);           
+    SetIntData2DataBlock(data, gTrapRect.x, &ds); 
+    SetIntData2DataBlock(data, gTrapRect.y, &ds); 
+    SetIntData2DataBlock(data, gTrapType, &ds); 
+    SendData(ALL_CLIENTS, data, ds);
+
+    SDL_AddTimer(5000, HideTrap, NULL);
 }
+
 static Uint32 SendCommandAfterDelay(Uint32 interval, void *param) {
     TimerParam *p = (TimerParam*)param;
     unsigned char data[MAX_DATA];
@@ -272,94 +231,18 @@ static int CheckWallCollision(int x, int y)
 static Uint32 ServerGameLoop(Uint32 interval, void *param) {
     int numClients = GetClientNum();
 
-    // ★追加: 毒トラップの継続ダメージ(DoT)
-    Uint32 now = SDL_GetTicks();
-    for (int i = 0; i < numClients; i++) {
-        if (gPoisonRemain[i] <= 0) continue;
-        if (gServerPlayerHP[i] <= 0) { gPoisonRemain[i] = 0; continue; }
-        if (now >= gPoisonNextTick[i]) {
-            int dmg = POISON_DMG_PER_TICK;
-            gServerPlayerHP[i] -= dmg;
-            if (gServerPlayerHP[i] < 0) gServerPlayerHP[i] = 0;
-
-            unsigned char data[MAX_DATA];
-            int ds = 0;
-            SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
-            SetIntData2DataBlock(data, i, &ds);
-            SetIntData2DataBlock(data, dmg, &ds);
-            SendData(ALL_CLIENTS, data, ds);
-
-            gPoisonRemain[i]--;
-            gPoisonNextTick[i] = now + POISON_INTERVAL_MS;
-
-            CheckWinnerAndTransition();
-        }
-    }
-
-
-
-    // ★追加: 温泉(回復)トラップの継続回復(HoT)
-    for (int i = 0; i < numClients; i++) {
-        if (gHotspringRemain[i] <= 0) continue;
-        if (gServerPlayerHP[i] <= 0) { gHotspringRemain[i] = 0; continue; }
-        if (now >= gHotspringNextTick[i]) {
-            int heal = HOTSPRING_HEAL_PER_TICK;
-            // サーバ側HP更新 (回復なので + )
-            gServerPlayerHP[i] += heal;
-            if (gServerPlayerHP[i] > 150) gServerPlayerHP[i] = 150;
-
-            unsigned char data[MAX_DATA];
-            int ds = 0;
-            // 既存のAPPLY_DAMAGE_COMMANDを流用: amountが負なら回復として扱える設計
-            SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
-            SetIntData2DataBlock(data, i, &ds);
-            SetIntData2DataBlock(data, -heal, &ds);
-            SendData(ALL_CLIENTS, data, ds);
-
-            gHotspringRemain[i]--;
-            gHotspringNextTick[i] = now + HOTSPRING_INTERVAL_MS;
-        }
-    }
-    // 1. トラップ出現（ぽこぽこ）
-    Uint32 nowTicks = SDL_GetTicks();
-    if (nowTicks >= gNextTrapSpawnAt) {
+    // 1. トラップ抽選 (既存のまま)
+    if (!gTrapActive && rand() % 500 == 0) {
         SpawnTrap();
-        gNextTrapSpawnAt = nowTicks + TRAP_SPAWN_INTERVAL_MS;
     }
 
-    // 1b. トラップの寿命処理
-    for (int ti = 0; ti < MAX_TRAPS; ti++) {
-        if (gTraps[ti].active && nowTicks >= gTraps[ti].expireAt) {
-            DespawnTrap(ti);
-        }
-    }
-
-    // 2. トラップ判定（複数対応）
-for (int ti = 0; ti < MAX_TRAPS; ti++) {
-    if (!gTraps[ti].active) continue;
-
-    for (int i = 0; i < numClients; i++) {
-        if (gServerPlayerHP[i] <= 0) continue;
-
-        SDL_Rect playerRect = {gPlayerPosX[i], gPlayerPosY[i], PLAYER_SIZE, PLAYER_SIZE};
-        if (SDL_HasIntersection(&playerRect, &gTraps[ti].rect)) {
-            int amount = 0;
-
-            if (gTraps[ti].type == 0) {
-                amount = -20; // 回復(+20)
-            } else if (gTraps[ti].type == 1) {
-                amount = 30;  // ダメージ(30)
-            } else if (gTraps[ti].type == 2) {
-                // 毒: 1秒ごとに1ダメージを30秒
-                gPoisonRemain[i] = POISON_TICKS;
-                gPoisonNextTick[i] = SDL_GetTicks() + POISON_INTERVAL_MS;
-            } else if (gTraps[ti].type == 3) {
-                // 温泉: 1秒ごとに1回復を30秒
-                gHotspringRemain[i] = HOTSPRING_TICKS;
-                gHotspringNextTick[i] = SDL_GetTicks() + HOTSPRING_INTERVAL_MS;
-            }
-
-            if (amount != 0) {
+    // 2. トラップ判定 (既存のまま)
+    if (gTrapActive) {
+        for (int i = 0; i < numClients; i++) {
+            if (gServerPlayerHP[i] <= 0) continue;
+            SDL_Rect playerRect = {gPlayerPosX[i], gPlayerPosY[i], PLAYER_SIZE, PLAYER_SIZE};
+            if (SDL_HasIntersection(&playerRect, &gTrapRect)) {
+                int amount = (gTrapType == 0) ? -20 : 30;
                 gServerPlayerHP[i] -= amount;
                 if (gServerPlayerHP[i] > 150) gServerPlayerHP[i] = 150;
                 if (gServerPlayerHP[i] < 0) gServerPlayerHP[i] = 0;
@@ -367,20 +250,18 @@ for (int ti = 0; ti < MAX_TRAPS; ti++) {
                 unsigned char data[MAX_DATA];
                 int ds = 0;
                 SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
-                SetIntData2DataBlock(data, i, &ds);
+                SetIntData2DataBlock(data, i, &ds);     
                 SetIntData2DataBlock(data, amount, &ds);
                 SendData(ALL_CLIENTS, data, ds);
-            }
 
-            // 罠は踏まれたら消える
-            DespawnTrap(ti);
-            CheckWinnerAndTransition();
-            break;
+                HideTrap(0, NULL);
+                CheckWinnerAndTransition();
+                break; 
+            }
         }
     }
-}
 
-// 3. 弾の処理 (修正ポイント)
+    // 3. 弾の処理 (修正ポイント)
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         if (!gServerProjectiles[i].active) continue;
 
@@ -618,14 +499,6 @@ int ExecuteCommand(char command, int pos) {
             RecvCharData(pos, &d);
 
             int weaponID = gClientWeaponID[id];
-            
-            // ★ ステータス表から最大連射数(STAT_RATE)を取得
-            int maxBullet = gServerWeaponStats[weaponID][STAT_RATE];
-
-            // 弾数制限のチェック
-            if (CountPlayerBullets(id) >= maxBullet) {
-                return endFlag;
-            }
             
             for (int i = 0; i < MAX_PROJECTILES; i++) {
                 if (!gServerProjectiles[i].active) {

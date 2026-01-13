@@ -42,12 +42,12 @@ typedef struct {
 #define PROJECTILE_STEP 1 
 
 #define MAX_WEAPONS 4 
-#define MAX_STATS_PER_WEAPON 4 // 1つの武器に紐づくステータスの数 (CT, 飛距離, 威力, 体力, 連射数, 移動速度)
+#define MAX_STATS_PER_WEAPON 3// 1つの武器に紐づくステータスの数 (CT, 飛距離, 威力, 体力, 連射数, 移動速度)
 #define MAX_STAT_NAME_SIZE 32 
 #define STAT_CT_TIME 0 // クールタイム
 #define STAT_RANGE   1 // 飛距離
 #define STAT_DAMAGE  2 // 威力
-#define STAT_RATE    3 // 連射数（リロードなしで撃てる数）
+//#define STAT_RATE    3 // 連射数（リロードなしで撃てる数）
 #define DIR_UP    'U'
 #define DIR_DOWN  'D'
 #define DIR_LEFT  'L'

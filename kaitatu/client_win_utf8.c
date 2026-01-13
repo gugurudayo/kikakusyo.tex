@@ -75,6 +75,7 @@ static Mix_Chunk *gSoundReady = NULL; // 音声データ用
 static Mix_Chunk *gSoundFire = NULL;  // ★追加: 拳銃を撃つ音
 static int gCountdownValue = -1;      // カウントダウン用 (-1は非表示)
 static Uint32 gCountdownStartTime = 0; // カウントダウン開始時刻
+static int IsHitWall(SDL_Rect *rect);
 
 extern int gTrapActive;
 extern int gTrapX;
@@ -157,66 +158,80 @@ void FillPolygon(SDL_Renderer *renderer, int centerX, int centerY, int radius, i
  * 弾の更新と描画
  */
 void UpdateAndDrawProjectiles(void) {
-    const int SIZE = 25; 
+    const int SIZE = 25;
     const int RADIUS = SIZE / 2;
 
+    int w, h;
+    SDL_GetWindowSize(gMainWindow, &w, &h);
+
     for (int i = 0; i < MAX_PROJECTILES; i++) {
-        if (gProjectiles[i].active) {
-            
-            // 1. 位置の更新 (省略なし)
-            char dir = gProjectiles[i].direction;
-            int step = PROJECTILE_STEP;
-            if (dir == DIR_UP) gProjectiles[i].y -= step;
-            else if (dir == DIR_DOWN) gProjectiles[i].y += step;
-            else if (dir == DIR_LEFT) gProjectiles[i].x -= step;
-            else if (dir == DIR_RIGHT) gProjectiles[i].x += step;
-            else if (dir == DIR_UP_LEFT)    { gProjectiles[i].y -= step; gProjectiles[i].x -= step; }
-            else if (dir == DIR_UP_RIGHT)   { gProjectiles[i].y -= step; gProjectiles[i].x += step; }
-            else if (dir == DIR_DOWN_LEFT)  { gProjectiles[i].y += step; gProjectiles[i].x -= step; }
-            else if (dir == DIR_DOWN_RIGHT) { gProjectiles[i].y += step; gProjectiles[i].x += step; }
+        if (!gProjectiles[i].active) continue;
 
-            // 2. 画面外チェック
-            int w, h;
-            SDL_GetWindowSize(gMainWindow, &w, &h);
-            if (gProjectiles[i].x < -SIZE || gProjectiles[i].x > w || 
-                gProjectiles[i].y < -SIZE || gProjectiles[i].y > h) {
-                gProjectiles[i].active = 0;
-                continue;
+        // ===== 1. 次の位置を計算 =====
+        int nextX = gProjectiles[i].x;
+        int nextY = gProjectiles[i].y;
+
+        char dir = gProjectiles[i].direction;
+        int step = PROJECTILE_STEP;
+
+        if (dir == DIR_UP) nextY -= step;
+        else if (dir == DIR_DOWN) nextY += step;
+        else if (dir == DIR_LEFT) nextX -= step;
+        else if (dir == DIR_RIGHT) nextX += step;
+        else if (dir == DIR_UP_LEFT)    { nextY -= step; nextX -= step; }
+        else if (dir == DIR_UP_RIGHT)   { nextY -= step; nextX += step; }
+        else if (dir == DIR_DOWN_LEFT)  { nextY += step; nextX -= step; }
+        else if (dir == DIR_DOWN_RIGHT) { nextY += step; nextX += step; }
+
+        // ===== 2. 壁との衝突判定 =====
+        SDL_Rect bulletRect = { nextX, nextY, SIZE, SIZE };
+        if (IsHitWall(&bulletRect)) {
+            gProjectiles[i].active = 0;
+            continue; // 壁に当たったので消滅
+        }
+
+        // ===== 3. 画面外チェック =====
+        if (nextX < -SIZE || nextX > w ||
+            nextY < -SIZE || nextY > h) {
+            gProjectiles[i].active = 0;
+            continue;
+        }
+
+        // ===== 4. 座標確定 =====
+        gProjectiles[i].x = nextX;
+        gProjectiles[i].y = nextY;
+
+        // ===== 5. 描画 =====
+        int centerX = gProjectiles[i].x + RADIUS;
+        int centerY = gProjectiles[i].y + RADIUS;
+
+        SDL_SetRenderDrawColor(gMainRenderer, 0, 0, 0, 255);
+
+        int weaponType = gProjectiles[i].clientID;
+        switch (weaponType) {
+            case 0:
+                FillPolygon(gMainRenderer, centerX, centerY, RADIUS, 16);
+                break;
+            case 1: {
+                SDL_Rect r = { gProjectiles[i].x, gProjectiles[i].y, SIZE, SIZE };
+                SDL_RenderFillRect(gMainRenderer, &r);
+                break;
             }
-
-            // 3. 描画設定（黒色）
-            int weaponType = gProjectiles[i].clientID; 
-            int centerX = gProjectiles[i].x + RADIUS;
-            int centerY = gProjectiles[i].y + RADIUS;
-
-            SDL_SetRenderDrawColor(gMainRenderer, 0, 0, 0, 255);
-
-            switch (weaponType) {
-                case 0: // 円 (16角形)
-                    FillPolygon(gMainRenderer, centerX, centerY, RADIUS, 16);
-                    break;
-                case 1: // 正方形
-                    {
-                        SDL_Rect r = {gProjectiles[i].x, gProjectiles[i].y, SIZE, SIZE};
-                        SDL_RenderFillRect(gMainRenderer, &r);
-                    }
-                    break;
-                case 2: // 三角形
-                    FillPolygon(gMainRenderer, centerX, centerY, RADIUS, 3);
-                    break;
-                case 3: // 五角形
-                    FillPolygon(gMainRenderer, centerX, centerY, RADIUS, 5);
-                    break;
-                default:
-                    {
-                        SDL_Rect r = {gProjectiles[i].x, gProjectiles[i].y, SIZE, SIZE};
-                        SDL_RenderFillRect(gMainRenderer, &r);
-                    }
-                    break;
+            case 2:
+                FillPolygon(gMainRenderer, centerX, centerY, RADIUS, 3);
+                break;
+            case 3:
+                FillPolygon(gMainRenderer, centerX, centerY, RADIUS, 5);
+                break;
+            default: {
+                SDL_Rect r = { gProjectiles[i].x, gProjectiles[i].y, SIZE, SIZE };
+                SDL_RenderFillRect(gMainRenderer, &r);
+                break;
             }
         }
     }
 }
+
 // 発射コマンドをサーバーに送信する関数 (★修正: direction 引数を追加★)
 void SendFireCommand(char direction)
 {
@@ -263,6 +278,32 @@ static void DrawText_Internal(const char* text,int x,int y,Uint8 r,Uint8 g,Uint8
     SDL_FreeSurface(surf);
     SDL_RenderCopy(gMainRenderer, tex, NULL, &dst);
     SDL_DestroyTexture(tex);
+}
+
+static int IsHitWall(SDL_Rect *rect)
+{
+    int w, h;
+    SDL_GetWindowSize(gMainWindow, &w, &h);
+
+    int blockCount = 8;
+    int blockSize = 150;
+    int cols = 4;
+    int rows = 2;
+    int cell_w = w / cols;
+    int cell_h = h / rows;
+
+    for (int i = 0; i < blockCount; i++) {
+        SDL_Rect blockRect;
+        blockRect.x = (i % cols) * cell_w + (cell_w / 2) - (blockSize / 2);
+        blockRect.y = (i / cols) * cell_h + (cell_h / 2) - (blockSize / 2);
+        blockRect.w = blockSize;
+        blockRect.h = blockSize;
+
+        if (SDL_HasIntersection(rect, &blockRect)) {
+            return 1; // 壁に衝突
+        }
+    }
+    return 0;
 }
 
 // プレイヤーIDとそのHPを保持する構造体

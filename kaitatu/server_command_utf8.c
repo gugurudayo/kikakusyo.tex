@@ -200,6 +200,35 @@ static int CheckCollision(ServerProjectile *bullet, int playerID) {
             bullet->y + PROJECTILE_SIZE > py);
 }
 
+static int CheckWallCollision(int x, int y)
+{
+    int screenW = 1300;
+    int screenH = 1000;
+    int cols = 4;
+    int rows = 2;
+    int cell_w = screenW / cols;
+    int cell_h = screenH / rows;
+    int blockSize = 150;
+
+    SDL_Rect bullet = { x, y, PROJECTILE_SIZE, PROJECTILE_SIZE };
+
+    for (int i = 0; i < 8; i++) {
+        int r = i / cols;
+        int c = i % cols;
+
+        int bx = c * cell_w + (cell_w / 2) - (blockSize / 2);
+        int by = r * cell_h + (cell_h / 2) - (blockSize / 2);
+
+        SDL_Rect block = { bx, by, blockSize, blockSize };
+
+        if (SDL_HasIntersection(&bullet, &block)) {
+            return 1; // 壁に当たった
+        }
+    }
+    return 0;
+}
+
+
 static Uint32 ServerGameLoop(Uint32 interval, void *param) {
     int numClients = GetClientNum();
 
@@ -246,51 +275,65 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
         
         char dir = gServerProjectiles[i].direction;
 
-        // SERVER_PROJECTILE_STEP 分の移動をシミュレート
         for (int k = 0; k < SERVER_PROJECTILE_STEP; k++) {
-            // 座標更新
-            if (dir == DIR_UP) gServerProjectiles[i].y--;
-            else if (dir == DIR_DOWN) gServerProjectiles[i].y++;
-            else if (dir == DIR_LEFT) gServerProjectiles[i].x--;
-            else if (dir == DIR_RIGHT) gServerProjectiles[i].x++;
-            else if (dir == DIR_UP_LEFT)    { gServerProjectiles[i].y--; gServerProjectiles[i].x--; }
-            else if (dir == DIR_UP_RIGHT)   { gServerProjectiles[i].y--; gServerProjectiles[i].x++; }
-            else if (dir == DIR_DOWN_LEFT)  { gServerProjectiles[i].y++; gServerProjectiles[i].x--; }
-            else if (dir == DIR_DOWN_RIGHT) { gServerProjectiles[i].y++; gServerProjectiles[i].x++; }
 
-            // ★ 飛距離をカウント
-            gServerProjectiles[i].distance++;
-            
-            // ★ 飛距離チェック
-            if (gServerProjectiles[i].distance >= maxRange) {
-                gServerProjectiles[i].active = 0;
-                break;
-            }
+    int nextX = gServerProjectiles[i].x;
+    int nextY = gServerProjectiles[i].y;
 
-            // 当たり判定
-            int hitFound = 0;
-            for (int j = 0; j < numClients; j++) {
-                if (j == sid || gServerPlayerHP[j] <= 0) continue;
+    // ① 次の座標を計算（まだ反映しない）
+    if (dir == DIR_UP) nextY--;
+    else if (dir == DIR_DOWN) nextY++;
+    else if (dir == DIR_LEFT) nextX--;
+    else if (dir == DIR_RIGHT) nextX++;
+    else if (dir == DIR_UP_LEFT)    { nextY--; nextX--; }
+    else if (dir == DIR_UP_RIGHT)   { nextY--; nextX++; }
+    else if (dir == DIR_DOWN_LEFT)  { nextY++; nextX--; }
+    else if (dir == DIR_DOWN_RIGHT) { nextY++; nextX++; }
 
-                if (CheckCollision(&gServerProjectiles[i], j)) {
-                    gServerPlayerHP[j] -= dmg; // ステータスの威力を適用
-                    if (gServerPlayerHP[j] < 0) gServerPlayerHP[j] = 0;
-                    
-                    unsigned char data[MAX_DATA];
-                    int ds = 0;
-                    SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
-                    SetIntData2DataBlock(data, j, &ds);
-                    SetIntData2DataBlock(data, dmg, &ds);
-                    SendData(ALL_CLIENTS, data, ds);
-                    
-                    gServerProjectiles[i].active = 0;
-                    CheckWinnerAndTransition(); 
-                    hitFound = 1;
-                    break;
-                }
-            }
-            if (hitFound) break;
+    // ② 先に壁判定
+    if (CheckWallCollision(nextX, nextY) ||
+    CheckWallCollision(nextX + PROJECTILE_SIZE - 1, nextY) ||
+    CheckWallCollision(nextX, nextY + PROJECTILE_SIZE - 1) ||
+    CheckWallCollision(nextX + PROJECTILE_SIZE - 1, nextY + PROJECTILE_SIZE - 1)) {
+    gServerProjectiles[i].active = 0;
+    break;
+}
+
+    // ③ 問題なければ移動を確定
+    gServerProjectiles[i].x = nextX;
+    gServerProjectiles[i].y = nextY;
+
+    // ④ 飛距離チェック
+    gServerProjectiles[i].distance++;
+    if (gServerProjectiles[i].distance >= maxRange) {
+        gServerProjectiles[i].active = 0;
+        break;
+    }
+
+    // ⑤ プレイヤー当たり判定
+    for (int j = 0; j < numClients; j++) {
+        if (j == sid || gServerPlayerHP[j] <= 0) continue;
+
+        if (CheckCollision(&gServerProjectiles[i], j)) {
+            gServerPlayerHP[j] -= dmg;
+            if (gServerPlayerHP[j] < 0) gServerPlayerHP[j] = 0;
+
+            unsigned char data[MAX_DATA];
+            int ds = 0;
+            SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
+            SetIntData2DataBlock(data, j, &ds);
+            SetIntData2DataBlock(data, dmg, &ds);
+            SendData(ALL_CLIENTS, data, ds);
+
+            gServerProjectiles[i].active = 0;
+            CheckWinnerAndTransition();
+            break;
         }
+    }
+
+    if (!gServerProjectiles[i].active) break;
+}
+
 
         // 画面外判定
         if (gServerProjectiles[i].active) {

@@ -94,7 +94,7 @@ int ExecuteCommand(char command) {
             
             for (int i = 0; i < MAX_PROJECTILES; i++) {
                 if (!gProjectiles[i].active) {
-                    gProjectiles[i] = (Projectile){x, y, sid, 1, d};
+                    gProjectiles[i] = (Projectile){x, y, sid, 1, d, 0};
                     break;
                 }
             }

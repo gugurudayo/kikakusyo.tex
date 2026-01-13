@@ -85,10 +85,10 @@ Projectile gProjectiles[MAX_PROJECTILES];
 
 int gPlayerHP[MAX_CLIENTS]; 
 int gWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
-    { 1000, 400, 10},  // 武器 0
-    { 600, 1000, 40}, // 武器 1
-    { 800, 1200, 40}, // 武器 2
-    { 400, 300, 20}    // 武器 3
+    { 1000, 400, 10},  
+    { 600, 1000, 40}, 
+    { 800, 1200, 40}, 
+    { 400, 300, 20}
 };
 // ステータス名の定義（表示用）
 char gStatNames[MAX_STATS_PER_WEAPON][MAX_STAT_NAME_SIZE] = {

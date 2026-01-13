@@ -63,10 +63,10 @@ static int GetMaxBulletByWeapon(int weaponID);
 static int CountPlayerBullets(int playerID);
 
 int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
-    { 500,  1000, 10, 3 },
-    { 1500, 1500, 30, 1 },
-    { 1000, 1200, 20, 2 },
-    { 800,  800,  15, 4 }
+    { 500,  1000, 10},
+    { 1500, 1500, 30},
+    { 1000, 1200, 20},
+    { 800,  800,  15}
 };
 extern CLIENT gClients[MAX_CLIENTS];
 extern int GetClientNum(void);
@@ -500,14 +500,6 @@ int ExecuteCommand(char command, int pos) {
             RecvCharData(pos, &d);
 
             int weaponID = gClientWeaponID[id];
-            
-            // ★ ステータス表から最大連射数(STAT_RATE)を取得
-            int maxBullet = gServerWeaponStats[weaponID][STAT_RATE];
-
-            // 弾数制限のチェック
-            if (CountPlayerBullets(id) >= maxBullet) {
-                return endFlag;
-            }
             
             for (int i = 0; i < MAX_PROJECTILES; i++) {
                 if (!gServerProjectiles[i].active) {

@@ -45,4 +45,10 @@ extern void SetScreenState(int state);
 extern void SetXPressedFlag(int clientID); 
 extern void UpdatePlayerPos(int clientID, char direction); 
 extern void SetPlayerMoveStep(int clientID, int step); 
+
+/* Trap info (multi) */
+extern int gTrapActiveArr[MAX_TRAPS];
+extern int gTrapXArr[MAX_TRAPS];
+extern int gTrapYArr[MAX_TRAPS];
+extern int gTrapTypeArr[MAX_TRAPS];
 #endif

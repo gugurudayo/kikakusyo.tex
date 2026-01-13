@@ -1,212 +1,146 @@
 // client.c
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
-#include <fcntl.h>
-#include <errno.h>
 
 #include <SDL2/SDL.h>
+#include <joyconlib.h>
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
-
-typedef struct {
-    int player_id; // 0 or 1
-    int dx;        // -1, 0, 1
-    int dy;        // -1, 0, 1
-} MovePacket;
+#define SERVER_IP "127.0.0.1"
+#define PORT 5000
 
 typedef struct {
-    float x[2];
-    float y[2];
-} StatePacket;
+    float x;
+    float y;
+} PlayerPos;
 
-// ソケットをノンブロッキングにする
-static int set_nonblocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) return -1;
-    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+/* ===== 共有データ ===== */
+PlayerPos myPos = {100, 100};
+PlayerPos enemyPos = {300, 300};
+
+float joy_lx = 0.0f;
+float joy_ly = 0.0f;
+
+pthread_mutex_t joy_mutex   = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t enemy_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* ===== Joy-Con ===== */
+joyconlib_t jc;
+
+/* ===== Joy-Con入力スレッド ===== */
+void* joycon_thread(void* arg)
+{
+    while (1) {
+        joycon_get_state(&jc);
+
+        pthread_mutex_lock(&joy_mutex);
+        joy_lx = jc.stick.x;
+        joy_ly = jc.stick.y;
+        pthread_mutex_unlock(&joy_mutex);
+
+        SDL_Delay(1);
+    }
+    return NULL;
 }
 
-int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        printf("使い方: %s <server_ip> <player_id(0 or 1)>\n", argv[0]);
-        return 1;
-    }
+/* ===== ネットワーク受信スレッド ===== */
+void* net_thread(void* arg)
+{
+    int sock = *(int*)arg;
+    PlayerPos buf;
 
-    const char *server_ip = argv[1];
-    int player_id = atoi(argv[2]);
-    if (player_id != 0 && player_id != 1) {
-        printf("player_id は 0 または 1 を指定してください\n");
-        return 1;
-    }
+    while (1) {
+        recvfrom(sock, &buf, sizeof(buf), 0, NULL, NULL);
 
-    // サーバーへ接続
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        perror("socket");
-        return 1;
+        pthread_mutex_lock(&enemy_mutex);
+        enemyPos = buf;
+        pthread_mutex_unlock(&enemy_mutex);
     }
+    return NULL;
+}
+
+int main()
+{
+    /* ===== SDL ===== */
+    SDL_Init(SDL_INIT_VIDEO);
+
+    SDL_Window* window =
+        SDL_CreateWindow("Joy-Con Network Game",
+            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+            800, 600, 0);
+
+    SDL_Renderer* renderer =
+        SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+    /* ===== Joy-Con接続 ===== */
+    if (joycon_open(&jc, JOYCON_R) != JOYCON_ERR_NONE) {
+        printf("Joy-Con open failed\n");
+        exit(1);
+    }
+    printf("Joy-Con connected\n");
+
+    /* ===== UDP ===== */
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
 
     struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(50000);
-    if (inet_pton(AF_INET, server_ip, &addr.sin_addr) <= 0) {
-        perror("inet_pton");
-        close(sock);
-        return 1;
-    }
+    addr.sin_port = htons(PORT);
+    inet_pton(AF_INET, SERVER_IP, &addr.sin_addr);
 
-    if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        perror("connect");
-        close(sock);
-        return 1;
-    }
+    /* ===== スレッド起動 ===== */
+    pthread_t jc_th, net_th;
+    pthread_create(&jc_th, NULL, joycon_thread, NULL);
+    pthread_create(&net_th, NULL, net_thread, &sock);
 
-    // 最初の状態を受信（ブロッキングで1回だけ）
-    StatePacket state;
-    int received = 0;
-    while (received < (int)sizeof(state)) {
-        int n = recv(sock, ((char *)&state) + received, sizeof(state) - received, 0);
-        if (n <= 0) {
-            perror("initial recv");
-            close(sock);
-            return 1;
-        }
-        received += n;
-    }
+    int running = 1;
+    SDL_Event e;
 
-    // 非ブロッキングにする（recvで固まらないように）
-    if (set_nonblocking(sock) < 0) {
-        perror("set_nonblocking");
-        close(sock);
-        return 1;
-    }
-
-    
-
-    // SDL初期化
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) < 0) {
-        fprintf(stderr, "SDL_Init error: %s\n", SDL_GetError());
-        close(sock);
-        return 1;
-    }
-
-    SDL_Window *window = SDL_CreateWindow(
-        "2P Network Shooting (sample)",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        WINDOW_WIDTH, WINDOW_HEIGHT,
-        0
-    );
-    if (!window) {
-        fprintf(stderr, "SDL_CreateWindow error: %s\n", SDL_GetError());
-        SDL_Quit();
-        close(sock);
-        return 1;
-    }
-
-    SDL_Renderer *renderer =
-        SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (!renderer) {
-        fprintf(stderr, "SDL_CreateRenderer error: %s\n", SDL_GetError());
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        close(sock);
-        return 1;
-    }
-
-    int quit = 0;
-    while (!quit) {
-        SDL_Event e;
+    while (running) {
         while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) {
-                quit = 1;
-            }
+            if (e.type == SDL_QUIT) running = 0;
         }
 
-        // キーボード状態取得
-        const Uint8 *keys = SDL_GetKeyboardState(NULL);
-        int dx = 0, dy = 0;
+        /* Joy-Con入力反映 */
+        float lx, ly;
+        pthread_mutex_lock(&joy_mutex);
+        lx = joy_lx;
+        ly = joy_ly;
+        pthread_mutex_unlock(&joy_mutex);
 
-        if (player_id == 0) {
-            // プレイヤー0: WASD
-            if (keys[SDL_SCANCODE_A]) dx = -1;
-            if (keys[SDL_SCANCODE_D]) dx =  1;
-            if (keys[SDL_SCANCODE_W]) dy = -1;
-            if (keys[SDL_SCANCODE_S]) dy =  1;
-        } else {
-            // プレイヤー1: 矢印キー
-            if (keys[SDL_SCANCODE_LEFT])  dx = -1;
-            if (keys[SDL_SCANCODE_RIGHT]) dx =  1;
-            if (keys[SDL_SCANCODE_UP])    dy = -1;
-            if (keys[SDL_SCANCODE_DOWN])  dy =  1;
-        }
+        myPos.x += lx * 6.0f;
+        myPos.y += ly * 6.0f;
 
-        // 移動パケット送信
-        MovePacket move;
-        move.player_id = player_id;
-        move.dx = dx;
-        move.dy = dy;
+        /* 送信 */
+        sendto(sock, &myPos, sizeof(myPos), 0,
+               (struct sockaddr*)&addr, sizeof(addr));
 
-        int s = send(sock, &move, sizeof(move), 0);
-        if (s < 0 && errno != EWOULDBLOCK && errno != EAGAIN) {
-            perror("send");
-            quit = 1;
-        }
+        /* 描画用コピー */
+        PlayerPos drawEnemy;
+        pthread_mutex_lock(&enemy_mutex);
+        drawEnemy = enemyPos;
+        pthread_mutex_unlock(&enemy_mutex);
 
-        // サーバーからの最新状態をできるだけ受信
-        while (1) {
-            StatePacket tmp;
-            int n = recv(sock, &tmp, sizeof(tmp), 0);
-            if (n < 0) {
-                if (errno == EWOULDBLOCK || errno == EAGAIN) {
-                    // これ以上受け取るものはない
-                    break;
-                } else {
-                    perror("recv");
-                    quit = 1;
-                    break;
-                }
-            } else if (n == 0) {
-                printf("Server closed connection.\n");
-                quit = 1;
-                break;
-            } else if (n == sizeof(tmp)) {
-                // 受け取れたら state を更新
-                state = tmp;
-            } else {
-                // 中途半端なサイズは今回は無視（本当はバッファリングが必要）
-                break;
-            }
-        }
-
-        // 描画
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // 背景: 黒
+        /* 描画 */
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        SDL_Rect player0 = { (int)state.x[0], (int)state.y[0], 40, 40 };
-        SDL_Rect player1 = { (int)state.x[1], (int)state.y[1], 40, 40 };
+        SDL_Rect me = {myPos.x, myPos.y, 20, 20};
+        SDL_Rect en = {drawEnemy.x, drawEnemy.y, 20, 20};
 
-        // プレイヤー0: 赤
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        SDL_RenderFillRect(renderer, &me);
+
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_RenderFillRect(renderer, &player0);
-
-        // プレイヤー1: 青
-        SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
-        SDL_RenderFillRect(renderer, &player1);
+        SDL_RenderFillRect(renderer, &en);
 
         SDL_RenderPresent(renderer);
 
-        SDL_Delay(16); // 約60fps
+        SDL_Delay(16);
     }
 
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
     close(sock);
-    return 0;
+    SDL_Quit();
 }
+

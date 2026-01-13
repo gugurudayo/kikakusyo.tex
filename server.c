@@ -1,150 +1,58 @@
 // server.c
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
-#include <sys/select.h>
 
-#define SERVER_PORT 50000
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
-#define PLAYER_SPEED 5.0f
+#define PORT 5000
 
 typedef struct {
-    int player_id; // 0 or 1
-    int dx;        // -1, 0, 1
-    int dy;        // -1, 0, 1
-} MovePacket;
+    float x;
+    float y;
+} PlayerPos;
 
-typedef struct {
-    float x[2];
-    float y[2];
-} StatePacket;
+int main()
+{
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
 
-int main(void) {
-    int listen_fd, client_fd[2] = {-1, -1};
-    struct sockaddr_in addr;
-    socklen_t addrlen = sizeof(addr);
+    struct sockaddr_in addr, clients[2];
+    socklen_t len = sizeof(struct sockaddr_in);
+    int client_count = 0;
 
-    // ソケット作成
-    listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_fd < 0) {
-        perror("socket");
-        return 1;
-    }
-
-    int opt = 1;
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(SERVER_PORT);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(PORT);
+    addr.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        perror("bind");
-        close(listen_fd);
-        return 1;
-    }
+    bind(sock, (struct sockaddr*)&addr, sizeof(addr));
 
-    if (listen(listen_fd, 2) < 0) {
-        perror("listen");
-        close(listen_fd);
-        return 1;
-    }
+    printf("UDP Server started : %d\n", PORT);
 
-    printf("Server: waiting for 2 clients on port %d...\n", SERVER_PORT);
-
-    // クライアント2人接続を待つ
-    for (int i = 0; i < 2; i++) {
-        client_fd[i] = accept(listen_fd, (struct sockaddr *)&addr, &addrlen);
-        if (client_fd[i] < 0) {
-            perror("accept");
-            close(listen_fd);
-            return 1;
-        }
-        printf("Client %d connected.\n", i);
-    }
-
-    // プレイヤー初期位置
-    StatePacket state;
-    state.x[0] = 100.0f;
-    state.y[0] = 300.0f;
-    state.x[1] = 660.0f;
-    state.y[1] = 300.0f;
-
-    // 最初の状態を全員に送信しておく
-    for (int i = 0; i < 2; i++) {
-        if (send(client_fd[i], &state, sizeof(state), 0) != sizeof(state)) {
-            perror("send initial state");
-        }
-    }
-
-    // メインループ
     while (1) {
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        int maxfd = -1;
-        for (int i = 0; i < 2; i++) {
-            FD_SET(client_fd[i], &readfds);
-            if (client_fd[i] > maxfd) maxfd = client_fd[i];
-        }
+        PlayerPos pos;
+        struct sockaddr_in from;
 
-        // クライアントのどちらかからのデータを待つ
-        int ret = select(maxfd + 1, &readfds, NULL, NULL, NULL);
-        if (ret < 0) {
-            perror("select");
-            break;
-        }
+        recvfrom(sock, &pos, sizeof(pos), 0,
+                 (struct sockaddr*)&from, &len);
 
-        for (int i = 0; i < 2; i++) {
-            if (FD_ISSET(client_fd[i], &readfds)) {
-                MovePacket move;
-                int n = recv(client_fd[i], &move, sizeof(move), 0);
-                if (n <= 0) {
-                    printf("Client %d disconnected.\n", i);
-                    close(client_fd[i]);
-                    client_fd[i] = -1;
-                    // 本当は再接続対応などを考える
-                    goto cleanup;
-                }
-                if (n != sizeof(move)) {
-                    printf("Received unexpected size from client %d\n", i);
-                    continue;
-                }
-
-                // 移動処理
-                int id = move.player_id;
-                if (id < 0 || id > 1) continue;
-
-                state.x[id] += move.dx * PLAYER_SPEED;
-                state.y[id] += move.dy * PLAYER_SPEED;
-
-                // 画面外に出ないようにクリップ
-                if (state.x[id] < 0) state.x[id] = 0;
-                if (state.x[id] > WINDOW_WIDTH - 40) state.x[id] = WINDOW_WIDTH - 40;
-                if (state.y[id] < 0) state.y[id] = 0;
-                if (state.y[id] > WINDOW_HEIGHT - 40) state.y[id] = WINDOW_HEIGHT - 40;
-
-                // 新しい状態を全クライアントに送信
-                for (int j = 0; j < 2; j++) {
-                    if (client_fd[j] >= 0) {
-                        int s = send(client_fd[j], &state, sizeof(state), 0);
-                        if (s != sizeof(state)) {
-                            perror("send state");
-                        }
-                    }
-                }
+        int idx = -1;
+        for (int i = 0; i < client_count; i++) {
+            if (clients[i].sin_addr.s_addr == from.sin_addr.s_addr &&
+                clients[i].sin_port == from.sin_port) {
+                idx = i;
             }
         }
-    }
 
-cleanup:
-    for (int i = 0; i < 2; i++) {
-        if (client_fd[i] >= 0) close(client_fd[i]);
+        if (idx == -1 && client_count < 2) {
+            clients[client_count++] = from;
+            printf("Client %d connected\n", client_count);
+            continue;
+        }
+
+        if (client_count == 2) {
+            int other = (from.sin_port == clients[0].sin_port) ? 1 : 0;
+            sendto(sock, &pos, sizeof(pos), 0,
+                   (struct sockaddr*)&clients[other], len);
+        }
     }
-    close(listen_fd);
-    return 0;
 }
+

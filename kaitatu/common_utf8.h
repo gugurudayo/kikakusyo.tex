@@ -42,12 +42,12 @@ typedef struct {
 #define PROJECTILE_STEP 1 
 
 #define MAX_WEAPONS 4 
-#define MAX_STATS_PER_WEAPON 3// 1つの武器に紐づくステータスの数 (CT, 飛距離, 威力, 体力, 連射数, 移動速度)
+#define MAX_STATS_PER_WEAPON 4 // 1つの武器に紐づくステータスの数 (CT, 飛距離, 威力, 体力, 連射数, 移動速度)
 #define MAX_STAT_NAME_SIZE 32 
 #define STAT_CT_TIME 0 // クールタイム
 #define STAT_RANGE   1 // 飛距離
 #define STAT_DAMAGE  2 // 威力
-//#define STAT_RATE    3 // 連射数（リロードなしで撃てる数）
+#define STAT_RATE    3 // 連射数（リロードなしで撃てる数）
 #define DIR_UP    'U'
 #define DIR_DOWN  'D'
 #define DIR_LEFT  'L'
@@ -58,4 +58,14 @@ typedef struct {
 #define DIR_DOWN_RIGHT '4'
 #define TRANSITION_TIMER_ID 100 /* 画面遷移時の遅延時間（ミリ秒） */
 #define UPDATE_TRAP_COMMAND 0x08 /* サーバーが全クライアントへ罠設置情報を配信 */
+
+/* Trap system */
+#define MAX_TRAPS 3
+#define TRAP_TYPE_HEAL 0
+#define TRAP_TYPE_DAMAGE 1
+#define TRAP_TYPE_POISON 2
+#define TRAP_TYPE_HOTSPRING 3
+#define TRAP_TYPE_COUNT 4
+/* UPDATE_TRAP_COMMAND payload (v2): active(int), trap_id(int), x(int), y(int), type(int)
+   - if active==0: only active and trap_id are sent */
 #endif

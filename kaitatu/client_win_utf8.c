@@ -86,7 +86,7 @@ Projectile gProjectiles[MAX_PROJECTILES];
 int gPlayerHP[MAX_CLIENTS]; 
 int gWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
     { 1000, 400, 10},  
-    { 600, 1000, 40}, 
+    { 600, 200, 60}, 
     { 800, 1200, 40}, 
     { 400, 300, 20}
 };

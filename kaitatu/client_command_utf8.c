@@ -2,12 +2,6 @@
 
 #include "common_utf8.h"
 #include "client_func_utf8.h"
-
-/* Trap info (multi) */
-int gTrapActiveArr[MAX_TRAPS] = {0};
-int gTrapXArr[MAX_TRAPS] = {0};
-int gTrapYArr[MAX_TRAPS] = {0};
-int gTrapTypeArr[MAX_TRAPS] = {0};
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <assert.h>
@@ -100,7 +94,7 @@ int ExecuteCommand(char command) {
             
             for (int i = 0; i < MAX_PROJECTILES; i++) {
                 if (!gProjectiles[i].active) {
-                    gProjectiles[i] = (Projectile){x, y, sid, 1, d};
+                    gProjectiles[i] = (Projectile){x, y, sid, 1, d, 0};
                     break;
                 }
             }
@@ -130,36 +124,21 @@ int ExecuteCommand(char command) {
 
         /* ★追加：サーバーからのトラップ通知を受信 ★ */
         case UPDATE_TRAP_COMMAND: {
-    int active;
-    int trapId;
-    RecvIntData(&active);
-    RecvIntData(&trapId);
-
-    if (trapId < 0 || trapId >= MAX_TRAPS) {
-        // 不正IDは読み捨て（active==1の場合は残り3つ読む）
-        if (active) {
-            int dummy;
-            RecvIntData(&dummy);
-            RecvIntData(&dummy);
-            RecvIntData(&dummy);
+            int active;
+            RecvIntData(&active);
+            gTrapActive = active;
+            
+            if (active) {
+                RecvIntData(&gTrapX);
+                RecvIntData(&gTrapY);
+                RecvIntData(&gTrapType); // ★追加 タイプを受信
+                printf("[CLIENT] Trap SPAWNED at (%d, %d)\n", gTrapX, gTrapY);
+            } else {
+                printf("[CLIENT] Trap DESPAWNED\n");
+            }
+            DrawImageAndText();
+            break;
         }
-        break;
-    }
-
-    if (active) {
-        RecvIntData(&gTrapXArr[trapId]);
-        RecvIntData(&gTrapYArr[trapId]);
-        RecvIntData(&gTrapTypeArr[trapId]);
-        gTrapActiveArr[trapId] = 1;
-	       printf("[CLIENT] Trap[%d] SPAWNED at (%d, %d), type=%d\n",
-	              trapId, gTrapXArr[trapId], gTrapYArr[trapId], gTrapTypeArr[trapId]);
-    } else {
-        gTrapActiveArr[trapId] = 0;
-        printf("[CLIENT] Trap[%d] DESPAWNED\n", trapId);
-    }
-    DrawImageAndText();
-    break;
-}
 
         case SELECT_WEAPON_COMMAND: {
             int wid;

@@ -490,8 +490,10 @@ void DrawImageAndText(void){
 
         if (gTrapActive) {
             SDL_Rect tr = { gTrapX, gTrapY, 80, 80 };
-            if (gTrapType == 0) SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 0, 255);
-            else SDL_SetRenderDrawColor(gMainRenderer, 255, 0, 0, 255);
+            if (gTrapType == TRAP_TYPE_HEAL) SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 0, 255);
+            else if (gTrapType == TRAP_TYPE_DAMAGE) SDL_SetRenderDrawColor(gMainRenderer, 255, 0, 0, 255);
+            else if (gTrapType == TRAP_TYPE_POISON) SDL_SetRenderDrawColor(gMainRenderer, 0, 200, 0, 255);
+            else SDL_SetRenderDrawColor(gMainRenderer, 0, 180, 255, 255);
             SDL_RenderFillRect(gMainRenderer, &tr);
             SDL_SetRenderDrawColor(gMainRenderer, 0, 0, 0, 255);
             SDL_RenderDrawRect(gMainRenderer, &tr);

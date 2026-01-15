@@ -41,6 +41,11 @@ typedef struct {
 #define MAX_PROJECTILES (MAX_PROJECTILES_PER_CLIENT * MAX_CLIENTS)
 #define PROJECTILE_STEP 1 
 
+#define TRAP_TYPE_HEAL      0  // 回復（黄）
+#define TRAP_TYPE_DAMAGE    1  // ダメージ（赤）
+#define TRAP_TYPE_POISON    2  // 毒（緑など）
+#define TRAP_TYPE_HOTSPRING 3  // 温泉（青など）
+
 #define MAX_WEAPONS 4 
 #define MAX_STATS_PER_WEAPON 3// 1つの武器に紐づくステータスの数 (CT, 飛距離, 威力, 体力, 連射数, 移動速度)
 #define MAX_STAT_NAME_SIZE 32 

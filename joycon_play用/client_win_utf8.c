@@ -75,7 +75,7 @@ static int gPlayerMoveStep[MAX_CLIENTS];
 
 static Mix_Chunk *gSoundReady = NULL; // 音声データ用
  Mix_Chunk *gSoundFire = NULL;  // ★追加: 拳銃を撃つ音
-static int gCountdownValue = -1;      // カウントダウン用 (-1は非表示)
+int gCountdownValue = -1;      // カウントダウン用 (-1は非表示)
 static Uint32 gCountdownStartTime = 0; // カウントダウン開始時刻
 static int IsHitWall(SDL_Rect *rect);
 
@@ -495,8 +495,10 @@ void DrawImageAndText(void){
 
         if (gTrapActive) {
             SDL_Rect tr = { gTrapX, gTrapY, 80, 80 };
-            if (gTrapType == 0) SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 0, 255);
-            else SDL_SetRenderDrawColor(gMainRenderer, 255, 0, 0, 255);
+            if (gTrapType == TRAP_TYPE_HEAL) SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 0, 255);
+            else if (gTrapType == TRAP_TYPE_DAMAGE) SDL_SetRenderDrawColor(gMainRenderer, 255, 0, 0, 255);
+            else if (gTrapType == TRAP_TYPE_POISON) SDL_SetRenderDrawColor(gMainRenderer, 0, 200, 0, 255);
+            else SDL_SetRenderDrawColor(gMainRenderer, 0, 180, 255, 255);
             SDL_RenderFillRect(gMainRenderer, &tr);
             SDL_SetRenderDrawColor(gMainRenderer, 0, 0, 0, 255);
             SDL_RenderDrawRect(gMainRenderer, &tr);

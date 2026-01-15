@@ -11,6 +11,7 @@ extern int gMyClientID;
 extern int gCurrentScreenState;
 extern int gXPressedFlags[MAX_CLIENTS];
 extern SDL_Window *gMainWindow;
+extern int gCountdownValue; // 追加
 
 /* 外部関数 */
 extern void DrawImageAndText(void);
@@ -85,6 +86,7 @@ void ProcessJoyconInput() {
 
         /* 2-2. 8方向移動 */
         if (gControlMode == MODE_MOVE) {
+            if (gCountdownValue > 0) return; // カウントダウン中は移動不可
             static Uint32 lastMoveTime = 0;
             Uint32 currentTime = SDL_GetTicks();
             if (currentTime - lastMoveTime >= 50) {

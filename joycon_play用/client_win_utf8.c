@@ -6,6 +6,7 @@
 #include <SDL2/SDL_mixer.h> // ★追加
 #include "common_utf8.h"
 #include "client_func_utf8.h"
+#include "joyconlib.h"  // ライブラリをインクルード
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -41,7 +42,7 @@
 #define MAX_HP 150      // 最大体力 (タフネス機のHP:150に合わせる)
 
 /* グローバルUI/状態変数 */
-static SDL_Window *gMainWindow = NULL;
+ SDL_Window *gMainWindow = NULL;
 static SDL_Renderer *gMainRenderer = NULL;
 static SDL_Texture *gBackgroundTexture = NULL;
 static SDL_Texture *gResultTexture = NULL;
@@ -58,21 +59,22 @@ static TTF_Font *gFontRank = NULL;
 static TTF_Font *gFontName = NULL;
 static char gAllClientNames[MAX_CLIENTS][MAX_NAME_SIZE];
 static int gClientCount = 0;
-static Uint32 gLastFireTime = 0; // ★追加: 最後に弾を撃った時刻(ms)
+ Uint32 gLastFireTime = 0; // ★追加: 最後に弾を撃った時刻(ms)
 int gMyClientID = -1;
-static int gXPressedFlags[MAX_CLIENTS] = {0};
+ int gXPressedFlags[MAX_CLIENTS] = {0};
 int gCurrentScreenState = SCREEN_STATE_LOBBY_WAIT; // ★ 修正: 外部参照可能に ★
 static int gWeaponSent = 0;
-static int gControlMode = MODE_MOVE; 
+ int gControlMode = MODE_MOVE; 
 static int gPlayerPosX[MAX_CLIENTS];
 static int gPlayerPosY[MAX_CLIENTS];
-
+static joyconlib_t gJcR; // Joy-Con(R) 用の管理構造体
+static int gIsJcRConnected = 0;
 static int gPlayerMoveStep[MAX_CLIENTS]; 
 
-static int gSelectedWeaponID = -1;
+ int gSelectedWeaponID = -1;
 
 static Mix_Chunk *gSoundReady = NULL; // 音声データ用
-static Mix_Chunk *gSoundFire = NULL;  // ★追加: 拳銃を撃つ音
+ Mix_Chunk *gSoundFire = NULL;  // ★追加: 拳銃を撃つ音
 static int gCountdownValue = -1;      // カウントダウン用 (-1は非表示)
 static Uint32 gCountdownStartTime = 0; // カウントダウン開始時刻
 static int IsHitWall(SDL_Rect *rect);
@@ -81,6 +83,9 @@ extern int gTrapActive;
 extern int gTrapX;
 extern int gTrapY;
 extern int gTrapType;
+extern void InitJoycon();         // joyconlib.c で定義
+extern void ProcessJoyconInput(); // joyconlib.c で定義
+extern void CleanupJoycon();      // joyconlib.c で定義
 Projectile gProjectiles[MAX_PROJECTILES];
 
 int gPlayerHP[MAX_CLIENTS]; 
@@ -490,10 +495,8 @@ void DrawImageAndText(void){
 
         if (gTrapActive) {
             SDL_Rect tr = { gTrapX, gTrapY, 80, 80 };
-            if (gTrapType == TRAP_TYPE_HEAL) SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 0, 255);
-            else if (gTrapType == TRAP_TYPE_DAMAGE) SDL_SetRenderDrawColor(gMainRenderer, 255, 0, 0, 255);
-            else if (gTrapType == TRAP_TYPE_POISON) SDL_SetRenderDrawColor(gMainRenderer, 0, 200, 0, 255);
-            else SDL_SetRenderDrawColor(gMainRenderer, 0, 180, 255, 255);
+            if (gTrapType == 0) SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 0, 255);
+            else SDL_SetRenderDrawColor(gMainRenderer, 255, 0, 0, 255);
             SDL_RenderFillRect(gMainRenderer, &tr);
             SDL_SetRenderDrawColor(gMainRenderer, 0, 0, 0, 255);
             SDL_RenderDrawRect(gMainRenderer, &tr);
@@ -661,6 +664,9 @@ int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
         fprintf(stderr, "SDL_mixer init failed: %s\n", Mix_GetError());
         // オーディオ初期化失敗でもゲームは続行可能とする場合はリターンしない
     }
+    // Joy-Con(R) を開く
+    // 直接 joycon_open を呼ぶのではなく、joyconlib.c の関数を呼ぶ
+    InitJoycon();
 
     /* --- 3. 音声ファイルの読み込み --- */
     gSoundReady = Mix_LoadWAV("銃を構える.mp3");
@@ -746,6 +752,9 @@ int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
 
 /* DestroyWindow: 終了処理 */
 void DestroyWindow(void){
+    // Joy-Con を閉じる処理を一本化
+    CleanupJoycon();
+
     // TTF_CloseFont を維持
     if (gFontLarge) TTF_CloseFont(gFontLarge);
     if (gFontNormal) TTF_CloseFont(gFontNormal);
@@ -768,8 +777,43 @@ void DestroyWindow(void){
     IMG_Quit(); TTF_Quit(); SDL_Quit();
 }
 
+/* --- マウスとJoy-Con共通の武器選択処理 --- */
+void HandleWeaponSelection(int x, int y) {
+    if (gCurrentScreenState != SCREEN_STATE_GAME_SCREEN) return;
+
+    int win_w, win_h;
+    SDL_GetWindowSize(gMainWindow, &win_w, &win_h);
+    const int P = 20, Y_OFF = 50;
+    int rectW = (win_w - P * 4) / 2;
+    int rectH = (win_h - P * 7) / 2;
+    int leftX = (win_w - (rectW * 2 + P)) / 2;
+    int rightX = leftX + rectW + P;
+    int topY = (win_h - (rectH * 2 + P)) / 2 + Y_OFF;
+    int bottomY = topY + rectH + P;
+    int selectedID = -1;
+
+    if (x >= leftX && x < leftX + rectW) {
+        if (y >= topY && y < topY + rectH) selectedID = 0;
+        else if (y >= bottomY && y < bottomY + rectH) selectedID = 2;
+    } else if (x >= rightX && x < rightX + rectW) {
+        if (y >= topY && y < topY + rectH) selectedID = 1;
+        else if (y >= bottomY && y < bottomY + rectH) selectedID = 3;
+    }
+
+    if (selectedID != -1 && gWeaponSent == 0) {
+        gSelectedWeaponID = selectedID;
+        DrawImageAndText();
+        unsigned char data[MAX_DATA];
+        int dataSize = 0;
+        SetCharData2DataBlock(data, SELECT_WEAPON_COMMAND, &dataSize);
+        SetIntData2DataBlock(data, selectedID, &dataSize);
+        SendData(data, dataSize);
+        gWeaponSent = 1;
+    }
+}
 /* WindowEvent: 入力処理  */
-void WindowEvent(int num) {
+void WindowEvent(int num){
+    ProcessJoyconInput();
     SDL_Event event;
     if (SDL_PollEvent(&event)) {
         /* ★ 追加: カウントダウン中の操作ロック ★ */
@@ -861,40 +905,8 @@ void WindowEvent(int num) {
                 } // ここが if (gCurrentScreenState == SCREEN_STATE_RESULT) の閉じ
                 break; // ここが case SDL_KEYDOWN の閉じ
 
-            case SDL_MOUSEBUTTONDOWN:
-                if (gCurrentScreenState == SCREEN_STATE_GAME_SCREEN) {
-                    int x = event.button.x;
-                    int y = event.button.y;
-                    int win_w, win_h;
-                    SDL_GetWindowSize(gMainWindow, &win_w, &win_h);
-                    const int P = 20, Y_OFF = 50;
-                    int rectW = (win_w - P*4)/2;
-                    int rectH = (win_h - P*7)/2;
-                    int leftX = (win_w - (rectW*2 + P))/2;
-                    int rightX = leftX + rectW + P;
-                    int topY = (win_h - (rectH*2 + P))/2 + Y_OFF;
-                    int bottomY = topY + rectH + P;
-                    int selectedID = -1;
-
-                    if (x >= leftX && x < leftX + rectW) {
-                        if (y >= topY && y < topY + rectH) selectedID = 0;
-                        else if (y >= bottomY && y < bottomY + rectH) selectedID = 2;
-                    } else if (x >= rightX && x < rightX + rectW) {
-                        if (y >= topY && y < topY + rectH) selectedID = 1;
-                        else if (y >= bottomY && y < bottomY + rectH) selectedID = 3;
-                    }
-
-                    if (selectedID != -1 && gWeaponSent == 0) {
-                        gSelectedWeaponID = selectedID;
-                        DrawImageAndText();
-                        unsigned char data[MAX_DATA];
-                        int dataSize = 0;
-                        SetCharData2DataBlock(data, SELECT_WEAPON_COMMAND, &dataSize);
-                        SetIntData2DataBlock(data, selectedID, &dataSize);
-                        SendData(data, dataSize);
-                        gWeaponSent = 1;
-                    }
-                }
+           case SDL_MOUSEBUTTONDOWN: 
+               HandleWeaponSelection(event.button.x, event.button.y);
                 break;
 
             case SDL_USEREVENT: {

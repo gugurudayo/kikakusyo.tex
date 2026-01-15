@@ -2,6 +2,7 @@
 
 #include "server_common_utf8.h"
 #include "server_func_utf8.h"
+#include "common_utf8.h"  // for TRAP_TYPE_*
 #include <arpa/inet.h>
 #include <SDL2/SDL.h>
 #include <string.h>
@@ -56,6 +57,11 @@ static int gServerInitialized = 0;
 static int gTrapActive = 0;   
 static int gTrapType = 0;     // ★追加 0:回復(黄), 1:ダメージ(赤)
 static SDL_Rect gTrapRect = {0, 0, 80, 80}; 
+    // --- Status effects (DoT/HoT) ---
+// effectAmount: +1 = damage per second, -1 = heal per second
+static int gEffectRemaining[MAX_CLIENTS] = {0};
+static int gEffectAmount[MAX_CLIENTS] = {0};
+static Uint32 gEffectNextTick[MAX_CLIENTS] = {0};
 
 int gPlayerPosX[MAX_CLIENTS] = {0}; 
 int gPlayerPosY[MAX_CLIENTS] = {0};
@@ -133,7 +139,7 @@ void SpawnTrap(void) {
 
     // 確定した座標でトラップを有効化
     gTrapActive = 1;
-    gTrapType = rand() % 2; 
+    gTrapType = rand() % 4; 
 
     unsigned char data[MAX_DATA];
     int ds = 0;
@@ -232,7 +238,7 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
     int numClients = GetClientNum();
 
     // 1. トラップ抽選 (既存のまま)
-    if (!gTrapActive && rand() % 500 == 0) {
+    if (!gTrapActive && rand() % 200 == 0) {
         SpawnTrap();
     }
 
@@ -242,24 +248,68 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
             if (gServerPlayerHP[i] <= 0) continue;
             SDL_Rect playerRect = {gPlayerPosX[i], gPlayerPosY[i], PLAYER_SIZE, PLAYER_SIZE};
             if (SDL_HasIntersection(&playerRect, &gTrapRect)) {
-                int amount = (gTrapType == 0) ? -20 : 30;
-                gServerPlayerHP[i] -= amount;
-                if (gServerPlayerHP[i] > 150) gServerPlayerHP[i] = 150;
-                if (gServerPlayerHP[i] < 0) gServerPlayerHP[i] = 0;
+                // type 0/1: instant heal/damage (existing)
+                // type 2: poison DoT  (+1 per sec for 30 sec)
+                // type 3: hot spring HoT (-1 per sec for 30 sec)
+                if (gTrapType == TRAP_TYPE_POISON || gTrapType == TRAP_TYPE_HOTSPRING) {
+                    int amt = (gTrapType == TRAP_TYPE_POISON) ? 1 : -1;
+                    gEffectRemaining[i] = 30;                 // 30 seconds
+                    gEffectAmount[i] = amt;
+                    gEffectNextTick[i] = SDL_GetTicks() + 1000;
 
-                unsigned char data[MAX_DATA];
-                int ds = 0;
-                SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
-                SetIntData2DataBlock(data, i, &ds);     
-                SetIntData2DataBlock(data, amount, &ds);
-                SendData(ALL_CLIENTS, data, ds);
+                    // trigger feedback once (optional): send 0 so client can show something if it wants
+                    // (We keep protocol unchanged; DoT/HoT ticks will come every second as APPLY_DAMAGE_COMMAND.)
+                } else {
+                    int amount = (gTrapType == TRAP_TYPE_HEAL) ? -20 : 30;
+                    gServerPlayerHP[i] -= amount;
+                    if (gServerPlayerHP[i] > 150) gServerPlayerHP[i] = 150;
+                    if (gServerPlayerHP[i] < 0) gServerPlayerHP[i] = 0;
+
+                    unsigned char data[MAX_DATA];
+                    int ds = 0;
+                    SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
+                    SetIntData2DataBlock(data, i, &ds);
+                    SetIntData2DataBlock(data, amount, &ds);
+                    SendData(ALL_CLIENTS, data, ds);
+
+                    CheckWinnerAndTransition();
+                }
+
 
                 HideTrap(0, NULL);
-                CheckWinnerAndTransition();
+            
                 break; 
             }
         }
     }
+
+        // 2.5. DoT/HoT tick (1 per second, 30 seconds)
+    Uint32 now = SDL_GetTicks();
+    for (int pid = 0; pid < numClients; pid++) {
+        if (gEffectRemaining[pid] <= 0) continue;
+        if (gServerPlayerHP[pid] <= 0) { // dead -> stop ticking
+            gEffectRemaining[pid] = 0;
+            continue;
+        }
+        if (now >= gEffectNextTick[pid]) {
+            int amount = gEffectAmount[pid]; // +1 dmg, -1 heal
+            gServerPlayerHP[pid] -= amount;
+            if (gServerPlayerHP[pid] > 150) gServerPlayerHP[pid] = 150;
+            if (gServerPlayerHP[pid] < 0) gServerPlayerHP[pid] = 0;
+
+            unsigned char data[MAX_DATA];
+            int ds = 0;
+            SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
+            SetIntData2DataBlock(data, pid, &ds);
+            SetIntData2DataBlock(data, amount, &ds);
+            SendData(ALL_CLIENTS, data, ds);
+
+            gEffectRemaining[pid]--;
+            gEffectNextTick[pid] += 1000;
+            CheckWinnerAndTransition();
+        }
+    }
+
 
     // 3. 弾の処理 (修正ポイント)
     for (int i = 0; i < MAX_PROJECTILES; i++) {

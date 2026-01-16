@@ -23,6 +23,10 @@
 #define BLUE_WEAPON_ICON_IMAGE "862582.png"   // ID 1 用 (青)
 #define RED_WEAPON_ICON_IMAGE "23667746.png"  // ID 0 用 (赤)
 #define GREEN_WEAPON_ICON_IMAGE "1499296.png" // ID 3 用 (緑)
+#define PLAYER_0_IMAGE   "character_orihime_01.png" 
+#define PLAYER_1_IMAGE  "character_monster_yeti_02_blue.png"
+#define PLAYER_2_IMAGE "character_monster_kyuketsuki_02_blue.png"
+#define PLAYER_3_IMAGE "character_monster_zombie_green.png"
 #define WALL_IMAGE "file_00000000f2ac71f89100b764e7b42a72.png"  // 壁用の画像
 #define FONT_PATH "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf"
 #define DEFAULT_WINDOW_WIDTH 1300
@@ -50,6 +54,7 @@ static SDL_Texture *gYellowWeaponIconTexture = NULL; // ID 2 用
 static SDL_Texture *gBlueWeaponIconTexture = NULL;   // ID 1 用
 static SDL_Texture *gRedWeaponIconTexture = NULL;    // ID 0 用
 static SDL_Texture *gGreenWeaponIconTexture = NULL;  // ID 3 用
+static SDL_Texture *gPlayerTextures[MAX_CLIENTS] = {0};  //キャラクター画像を貼り付ける用のテキスチャー
 static SDL_Texture *gWallTexture = NULL; // 壁のテクスチャ用
 static TTF_Font *gFontLarge = NULL;
 static TTF_Font *gFontNormal = NULL;
@@ -376,14 +381,22 @@ void DrawImageAndText(void){
         int baseY = h / 2 + 40;
         int lineH = 40; 
         for (int i = 0; i < 4; i++){ 
-            int nameX = (w / 2) - 100;
-            int nameY = baseY + i * lineH;
-            const char* nameToDraw = (i < gClientCount) ? gAllClientNames[i] : "";
-            DrawText_Internal(nameToDraw, nameX, nameY, 255, 255, 255, gFontName);
-            if (i < gClientCount && gXPressedFlags[i] == 1){
+		if (i >= gClientCount) continue;
+		int iconSize = 48;
+		int iconX = (w / 2) - 160;
+		int iconY = baseY + i * lineH - 8;
+		int nameX = iconX + iconSize + 12;
+                int nameY = baseY + i * lineH;
+		const char* nameToDraw = (i < gClientCount) ? gAllClientNames[i] : "";
+		if (gPlayerTextures[i]) {
+			SDL_Rect dst = { iconX, iconY, iconSize, iconSize };
+                        SDL_RenderCopy(gMainRenderer, gPlayerTextures[i], NULL, &dst);
+		}
+		DrawText_Internal(nameToDraw, nameX, nameY, 255, 255, 255, gFontName);
+		if (i < gClientCount && gXPressedFlags[i] == 1){
                 DrawText_Internal(" X Pressed", nameX + 200, nameY, 255, 200, 0, gFontName);
-            }
-        }
+		}
+	}
     }
     else if (gCurrentScreenState == SCREEN_STATE_GAME_SCREEN){
         /* --- 武器選択画面の描画 --- */
@@ -518,9 +531,8 @@ void DrawImageAndText(void){
                 else if (i == 2) { r = 255; g = 255; b = 0;   }
                 else if (i == 3) { r = 0;   g = 255; b = 0;   }
             }
-
-            SDL_SetRenderDrawColor(gMainRenderer, r, g, b, 255);
-            SDL_RenderFillRect(gMainRenderer, &playerRect);
+	    
+	    SDL_RenderCopy(gMainRenderer, gPlayerTextures[i], NULL, &playerRect);
             
             if (currentHP > 0) {
                 /* HP数値の表示 */
@@ -545,11 +557,6 @@ void DrawImageAndText(void){
                         DrawText_Internal(ctText, gPlayerPosX[i], gPlayerPosY[i] - 45, 255, 100, 100, gFontNormal);
                     }
                 }
-            }
-
-            if (i == gMyClientID) {
-                SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255);
-                SDL_RenderDrawRect(gMainRenderer, &playerRect);
             }
         }
         UpdateAndDrawProjectiles();
@@ -614,24 +621,31 @@ void DrawImageAndText(void){
 
         for (int i = 0; i < rectCount; i++) {
             int rectY = titleBottomY + topMargin + i * (rectH + spacing);
+	    int iconSize = rectH - 10;  
+	    int iconX = startX + 10;
+	    int iconY = rectY + (rectH - iconSize) / 2;
+	    int textBaseX = startX + iconSize + 25;
             int clientID = rankedIDs[i];
             int displayRank = i + 1;
             if (i > 0 && gPlayerHP[rankedIDs[i]] == gPlayerHP[rankedIDs[i - 1]]) displayRank = i;
 
+	    if (gPlayerTextures[clientID]) {
+		    SDL_Rect iconRect = { iconX, iconY, iconSize, iconSize };
+		    SDL_RenderCopy(gMainRenderer, gPlayerTextures[clientID], NULL, &iconRect);
+	    }
             char rankText[16];
             sprintf(rankText, "%d位:", displayRank);
             int tw = 0, th = 0;
             TTF_SizeUTF8(gFontRank, rankText, &tw, &th);
-            DrawText_Internal(rankText, startX + 15, rectY + (rectH - th) / 2, 0, 0, 255, gFontRank);
-
+	    DrawText_Internal(rankText, textBaseX, rectY + (rectH - th) / 2, 0, 0, 255, gFontRank);
             char nameAndHP[MAX_NAME_SIZE + 20]; 
             sprintf(nameAndHP, "%s (HP: %d)", gAllClientNames[clientID], gPlayerHP[clientID]);
             int nw = 0, nh = 0;
             TTF_SizeUTF8(gFontName, nameAndHP, &nw, &nh);
-            DrawText_Internal(nameAndHP, startX + tw + 35, rectY + (rectH - nh) / 2, 0, 0, 255, gFontName);
+	    DrawText_Internal(nameAndHP, textBaseX + tw + 20, rectY + (rectH - nh) / 2, 0, 0, 255, gFontName);
 
             if (gXPressedFlags[clientID] == 1) {
-                DrawText_Internal("X Pressed", startX + tw + nw + 55, rectY + (rectH - nh) / 2, 255, 0, 0, gFontName);
+                DrawText_Internal("X Pressed", startX + tw + nw + 350, rectY + (rectH - nh) + 25 / 2, 255, 0, 0, gFontName);
             }
         }
     }
@@ -696,6 +710,10 @@ int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
     SDL_Surface *icon_blue = IMG_Load(BLUE_WEAPON_ICON_IMAGE);
     SDL_Surface *icon_red = IMG_Load(RED_WEAPON_ICON_IMAGE);
     SDL_Surface *icon_green = IMG_Load(GREEN_WEAPON_ICON_IMAGE);
+    SDL_Surface *p0 = IMG_Load(PLAYER_0_IMAGE);
+    SDL_Surface *p1 = IMG_Load(PLAYER_1_IMAGE);
+    SDL_Surface *p2 = IMG_Load(PLAYER_2_IMAGE);
+    SDL_Surface *p3 = IMG_Load(PLAYER_3_IMAGE);
     SDL_Surface *wallSurf = IMG_Load("file_00000000f2ac71f89100b764e7b42a72.png");
     const char *myWindowTitle = gAllClientNames[gMyClientID];
     gMainWindow = SDL_CreateWindow(myWindowTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, windowW, windowH, 0);
@@ -711,6 +729,10 @@ int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
     if (icon_blue) { gBlueWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_blue); SDL_FreeSurface(icon_blue); }
     if (icon_red) { gRedWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_red); SDL_FreeSurface(icon_red); }
     if (icon_green) { gGreenWeaponIconTexture = SDL_CreateTextureFromSurface(gMainRenderer, icon_green); SDL_FreeSurface(icon_green); }
+    if (p0) { gPlayerTextures[0] = SDL_CreateTextureFromSurface(gMainRenderer, p0); SDL_FreeSurface(p0); }
+    if (p1) { gPlayerTextures[1] = SDL_CreateTextureFromSurface(gMainRenderer, p1); SDL_FreeSurface(p1); }
+    if (p2) { gPlayerTextures[2] = SDL_CreateTextureFromSurface(gMainRenderer, p2); SDL_FreeSurface(p2); }
+    if (p3) { gPlayerTextures[3] = SDL_CreateTextureFromSurface(gMainRenderer, p3); SDL_FreeSurface(p3); }
 
     if (wallSurf) {
         gWallTexture = SDL_CreateTextureFromSurface(gMainRenderer, wallSurf);

@@ -201,9 +201,6 @@ int RecvCharData(int pos,char *charData)
     /* 引き数チェック */
     assert(0<=pos && pos<gClientNum); 
     assert(charData!=NULL);
-    
-    // RecvData はサーバー側のヘルパー関数
     n = RecvData(pos, charData, sizeof(char)); 
-
     return n;
 }

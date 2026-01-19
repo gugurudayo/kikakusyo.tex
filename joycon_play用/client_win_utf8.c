@@ -6,7 +6,7 @@
 #include <SDL2/SDL_mixer.h> 
 #include "common_utf8.h"
 #include "client_func_utf8.h"
-#include "joyconlib.h"  // Joy-Con用ライブラリ
+#include "joyconlib.h"  
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -20,15 +20,15 @@
 #define BACKGROUND_IMAGE "22823124.jpg" 
 #define RESULT_IMAGE "Chatgpt.png"     
 #define RESULT_BACK_IMAGE "2535410.jpg" 
-#define YELLOW_WEAPON_ICON_IMAGE "1192635.png" // ID 2 用 (黄色)
-#define BLUE_WEAPON_ICON_IMAGE "862582.png"   // ID 1 用 (青)
-#define RED_WEAPON_ICON_IMAGE "23667746.png"  // ID 0 用 (赤)
-#define GREEN_WEAPON_ICON_IMAGE "1499296.png" // ID 3 用 (緑)
+#define YELLOW_WEAPON_ICON_IMAGE "1192635.png" 
+#define BLUE_WEAPON_ICON_IMAGE "862582.png"  
+#define RED_WEAPON_ICON_IMAGE "23667746.png"  
+#define GREEN_WEAPON_ICON_IMAGE "1499296.png" 
 #define PLAYER_0_IMAGE   "character_orihime_01.png"
 #define PLAYER_1_IMAGE  "character_monster_yeti_02_blue.png"
 #define PLAYER_2_IMAGE "character_monster_kyuketsuki_02_blue.png"
 #define PLAYER_3_IMAGE "character_monster_zombie_green.png"
-#define WALL_IMAGE "file_00000000f2ac71f89100b764e7b42a72.png"  // 壁用の画像
+#define WALL_IMAGE "file_00000000f2ac71f89100b764e7b42a72.png" 
 #define FONT_PATH "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf"
 #define DEFAULT_WINDOW_WIDTH 1300
 #define DEFAULT_WINDOW_HEIGHT 1000
@@ -41,9 +41,9 @@
 #define MODE_FIRE 1
 
 
-#define HP_BAR_HEIGHT 5 // HPバーの高さ
-#define HP_BAR_WIDTH 50 // HPバーの幅 
-#define MAX_HP 150      // 最大体力 
+#define HP_BAR_HEIGHT 5 
+#define HP_BAR_WIDTH 50 
+#define MAX_HP 150      
 
 
 SDL_Window *gMainWindow = NULL;
@@ -51,12 +51,12 @@ static SDL_Renderer *gMainRenderer = NULL;
 static SDL_Texture *gBackgroundTexture = NULL;
 static SDL_Texture *gResultTexture = NULL;
 static SDL_Texture *gResultBackTexture = NULL;
-static SDL_Texture *gYellowWeaponIconTexture = NULL; // ID 2 用
-static SDL_Texture *gBlueWeaponIconTexture = NULL;   // ID 1 用
-static SDL_Texture *gRedWeaponIconTexture = NULL;    // ID 0 用
-static SDL_Texture *gGreenWeaponIconTexture = NULL;  // ID 3 用
-static SDL_Texture *gPlayerTextures[MAX_CLIENTS] = {0};  //キャラクター画像を貼り付ける用のテキスチャー
-static SDL_Texture *gWallTexture = NULL; // 壁のテクスチャ用
+static SDL_Texture *gYellowWeaponIconTexture = NULL; 
+static SDL_Texture *gBlueWeaponIconTexture = NULL;  
+static SDL_Texture *gRedWeaponIconTexture = NULL;    
+static SDL_Texture *gGreenWeaponIconTexture = NULL;  
+static SDL_Texture *gPlayerTextures[MAX_CLIENTS] = {0};  
+static SDL_Texture *gWallTexture = NULL; 
 static TTF_Font *gFontLarge = NULL;
 static TTF_Font *gFontNormal = NULL;
 static TTF_Font *gFontCountdown = NULL;
@@ -72,10 +72,10 @@ static int gWeaponSent = 0;
 int gControlMode = MODE_MOVE; 
 static int gPlayerPosX[MAX_CLIENTS];
 static int gPlayerPosY[MAX_CLIENTS];
-static joyconlib_t gJcR; // Joy-Con(R) 用の管理構造体
+static joyconlib_t gJcR; 
 static int gIsJcRConnected = 0;
 static int gPlayerMoveStep[MAX_CLIENTS]; 
-
+Uint32 gDeathTime[MAX_CLIENTS] = {0};
 int gSelectedWeaponID = -1;
 
 static Mix_Chunk *gSoundReady = NULL; 
@@ -83,8 +83,6 @@ Mix_Chunk *gSoundFire = NULL;
 int gCountdownValue = -1;      
 static Uint32 gCountdownStartTime = 0; 
 static int IsHitWall(SDL_Rect *rect);
-
-/* --- バトル制限時間（60秒） --- */
 #define BATTLE_TIME_LIMIT_MS 60000
 static Uint32 gBattleStartTime = 0;
 static int gBattleTimerActive = 0;
@@ -94,9 +92,9 @@ extern int gTrapActive;
 extern int gTrapX;
 extern int gTrapY;
 extern int gTrapType;
-extern void InitJoycon();         // joyconlib.c で定義
-extern void ProcessJoyconInput(); // joyconlib.c で定義
-extern void CleanupJoycon();      // joyconlib.c で定義
+extern void InitJoycon();        
+extern void ProcessJoyconInput();
+extern void CleanupJoycon();     
 Projectile gProjectiles[MAX_PROJECTILES];
 
 int gPlayerHP[MAX_CLIENTS]; 
@@ -106,7 +104,7 @@ int gWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
     { 800, 1200, 40}, 
     { 400, 300, 20}
 };
-// ステータス名の定義（表示用）
+// ステータス名
 char gStatNames[MAX_STATS_PER_WEAPON][MAX_STAT_NAME_SIZE] = {
     "クールタイム(ms)", 
     "球の飛距離(px)", 
@@ -119,12 +117,14 @@ void InitProjectiles(void)
 }
 
 
-void FillPolygon(SDL_Renderer *renderer, int centerX, int centerY, int radius, int sides) {
+void FillPolygon(SDL_Renderer *renderer, int centerX, int centerY, int radius, int sides) 
+{
     if (sides < 3) 
     return;
     SDL_Point points[32]; 
     if (sides > 30) sides = 30;
-    for (int i = 0; i < sides; i++) {
+    for (int i = 0; i < sides; i++) 
+    {
         float angle = i * 2.0f * (float)M_PI / sides - (float)M_PI / 2.0f;
         points[i].x = centerX + (int)(cosf(angle) * (float)radius);
         points[i].y = centerY + (int)(sinf(angle) * (float)radius);
@@ -132,23 +132,29 @@ void FillPolygon(SDL_Renderer *renderer, int centerX, int centerY, int radius, i
 
     int minY = centerY - radius;
     int maxY = centerY + radius;
-    for (int y = minY; y <= maxY; y++) {
+    for (int y = minY; y <= maxY; y++) 
+    {
         int x_intersections[32];
         int count = 0;
 
-        for (int i = 0; i < sides; i++) {
+        for (int i = 0; i < sides; i++)
+         {
             int next = (i + 1) % sides;
             int x1 = points[i].x, y1 = points[i].y;
             int x2 = points[next].x, y2 = points[next].y;
 
-            if ((y1 <= y && y2 > y) || (y2 <= y && y1 > y)) {
+            if ((y1 <= y && y2 > y) || (y2 <= y && y1 > y)) 
+            {
                 x_intersections[count++] = x1 + (y - y1) * (x2 - x1) / (y2 - y1);
             }
         }
 
-        for (int i = 0; i < count - 1; i++) {
-            for (int j = i + 1; j < count; j++) {
-                if (x_intersections[i] > x_intersections[j]) {
+        for (int i = 0; i < count - 1; i++) 
+        {
+            for (int j = i + 1; j < count; j++)
+             {
+                if (x_intersections[i] > x_intersections[j])
+                {
                     int tmp = x_intersections[i];
                     x_intersections[i] = x_intersections[j];
                     x_intersections[j] = tmp;
@@ -156,33 +162,36 @@ void FillPolygon(SDL_Renderer *renderer, int centerX, int centerY, int radius, i
             }
         }
 
-        for (int i = 0; i < count; i += 2) {
+        for (int i = 0; i < count; i += 2) 
+        {
             SDL_RenderDrawLine(renderer, x_intersections[i], y, x_intersections[i+1], y);
         }
     }
 }
 
-void UpdateAndDrawProjectiles(void) {
+void UpdateAndDrawProjectiles(void) 
+{
     const int SIZE = 25;
     const int RADIUS = SIZE / 2;
 
-    // ループ内での計算(移動・飛距離・壁判定)をすべて削除し、
-    // 現在保持されている座標(gProjectiles[i].x, y)で描画するだけにします。
-    for (int i = 0; i < MAX_PROJECTILES; i++) {
-        if (!gProjectiles[i].active) continue;
-
-        // ===== 描画処理のみ実行 =====
+    for (int i = 0; i < MAX_PROJECTILES; i++) 
+    {
+        if (!gProjectiles[i].active) 
+            continue;
+        // 移動
         int centerX = gProjectiles[i].x + RADIUS;
         int centerY = gProjectiles[i].y + RADIUS;
 
         SDL_SetRenderDrawColor(gMainRenderer, 0, 0, 0, 255);
 
         int weaponType = gProjectiles[i].clientID;
-        switch (weaponType) {
+        switch (weaponType) 
+        {
             case 0:
                 FillPolygon(gMainRenderer, centerX, centerY, RADIUS, 16);
                 break;
-            case 1: {
+            case 1: 
+            {
                 SDL_Rect r = { gProjectiles[i].x, gProjectiles[i].y, SIZE, SIZE };
                 SDL_RenderFillRect(gMainRenderer, &r);
                 break;
@@ -193,7 +202,9 @@ void UpdateAndDrawProjectiles(void) {
             case 3:
                 FillPolygon(gMainRenderer, centerX, centerY, RADIUS, 5);
                 break;
-            default: {
+
+            default: 
+            {
                 SDL_Rect r = { gProjectiles[i].x, gProjectiles[i].y, SIZE, SIZE };
                 SDL_RenderFillRect(gMainRenderer, &r);
                 break;
@@ -203,17 +214,15 @@ void UpdateAndDrawProjectiles(void) {
 }
 void SendFireCommand(char direction)
 {
-    // サーバーに FIRE_COMMAND を送信
+   
     unsigned char data[MAX_DATA];
     int dataSize = 0;
     SetCharData2DataBlock(data, FIRE_COMMAND, &dataSize); 
     // 自分のIDと現在の座標 (発射元の位置) を情報として送信
     SetIntData2DataBlock(data, gMyClientID, &dataSize);
-    // プレイヤーの正方形(50px)の中央付近(20pxオフセット)を送信
     SetIntData2DataBlock(data, gPlayerPosX[gMyClientID] + 20, &dataSize); 
     SetIntData2DataBlock(data, gPlayerPosY[gMyClientID], &dataSize);
     SetCharData2DataBlock(data, direction, &dataSize);
-    
     SendData(data, dataSize);
 }
 
@@ -221,7 +230,6 @@ void SetScreenState(int state);
 
 Uint32 BackToTitleScreen(Uint32 interval, void *param)
 {
-    printf("[DEBUG] BackToTitleScreen called - post user event\n");
     fflush(stdout);
     SDL_Event ev;
     SDL_zero(ev);
@@ -235,12 +243,15 @@ Uint32 BackToTitleScreen(Uint32 interval, void *param)
 
 /* プロトタイプ */
 void DrawImageAndText(void);
-static void DrawText_Internal(const char* text,int x,int y,Uint8 r,Uint8 g,Uint8 b, TTF_Font* font){
+static void DrawText_Internal(const char* text,int x,int y,Uint8 r,Uint8 g,Uint8 b, TTF_Font* font)
+{
     // フォントがロードされていれば描画する
-    if (!font || !text) return; 
+    if (!font || !text) 
+        return; 
     SDL_Color color = {r,g,b,255};
     SDL_Surface* surf = TTF_RenderUTF8_Blended(font,text,color);
-    if (!surf) return;
+    if (!surf) 
+        return;
     SDL_Texture* tex = SDL_CreateTextureFromSurface(gMainRenderer,surf);
     SDL_Rect dst = {x,y,surf->w,surf->h};
     SDL_FreeSurface(surf);
@@ -260,38 +271,58 @@ static int IsHitWall(SDL_Rect *rect)
     int cell_w = w / cols;
     int cell_h = h / rows;
 
-    for (int i = 0; i < blockCount; i++) {
+    for (int i = 0; i < blockCount; i++)
+    {
         SDL_Rect blockRect;
         blockRect.x = (i % cols) * cell_w + (cell_w / 2) - (blockSize / 2);
         blockRect.y = (i / cols) * cell_h + (cell_h / 2) - (blockSize / 2);
         blockRect.w = blockSize;
         blockRect.h = blockSize;
 
-        if (SDL_HasIntersection(rect, &blockRect)) {
-            return 1; // 壁に衝突
+        if (SDL_HasIntersection(rect, &blockRect)) 
+        {
+            return 1; 
         }
     }
     return 0;
 }
 
-// プレイヤーIDとそのHPを保持する構造体
 typedef struct {
     int id;
     int hp;
 } PlayerScore;
 
 // qsort用の比較関数 (HPが高い順にソート)
-int ComparePlayerScores(const void *a, const void *b) {
+int ComparePlayerScores(const void *a, const void *b) 
+{
     const PlayerScore *scoreA = (const PlayerScore *)a;
     const PlayerScore *scoreB = (const PlayerScore *)b;
-    return scoreB->hp - scoreA->hp;
+
+    // 生存優先：HPが残っている人が上
+    if (scoreA->hp > 0 && scoreB->hp > 0) 
+        return scoreB->hp - scoreA->hp;
+    if (scoreA->hp > 0 && scoreB->hp <= 0) 
+        return -1;
+    if (scoreA->hp <= 0 && scoreB->hp > 0) 
+        return 1;
+
+    // 両方死亡：死んだ時刻が「遅い（大きい）」方が上（＝粘った人が高順位）
+    // これにより、先に死んだ（時刻が小さい）人が下の順位になります
+    if (gDeathTime[scoreA->id] > gDeathTime[scoreB->id]) 
+        return -1;
+    if (gDeathTime[scoreA->id] < gDeathTime[scoreB->id]) 
+        return 1;
+
+    return 0;
 }
 
 // HPに基づいてプレイヤーIDの順位リストを返す関数
-void GetRankedPlayerIDs(int *rankedIDs) {
+void GetRankedPlayerIDs(int *rankedIDs) 
+{
     PlayerScore scores[MAX_CLIENTS];
     int numClients = gClientCount; 
-    for (int i = 0; i < numClients; i++) {
+    for (int i = 0; i < numClients; i++) 
+    {
         scores[i].id = i;
         scores[i].hp = gPlayerHP[i]; // 現在のHPを使用
     }
@@ -299,41 +330,48 @@ void GetRankedPlayerIDs(int *rankedIDs) {
     // HPが高い順にソート
     qsort(scores, numClients, sizeof(PlayerScore), ComparePlayerScores);
 
-    for (int i = 0; i < numClients; i++) {
+    for (int i = 0; i < numClients; i++) 
+    {
         rankedIDs[i] = scores[i].id;
     }
 }
 
-/* DrawImageAndText: 状態に応じた描画 */
-void DrawImageAndText(void){
+void DrawImageAndText(void)
+{
     int w=800,h=600;
     SDL_GetWindowSize(gMainWindow,&w,&h);
     SDL_RenderClear(gMainRenderer);
 
-    if (gCurrentScreenState == SCREEN_STATE_LOBBY_WAIT){
-        /* --- ロビー待機画面の描画 --- */
-        if (gBackgroundTexture) {
+    if (gCurrentScreenState == SCREEN_STATE_LOBBY_WAIT)
+    {
+        if (gBackgroundTexture) 
+        {
             SDL_RenderCopy(gMainRenderer, gBackgroundTexture, NULL, NULL);
-        } else { 
+        } 
+        else 
+        { 
             SDL_SetRenderDrawColor(gMainRenderer, 0, 100, 0, 255); 
             SDL_RenderFillRect(gMainRenderer, NULL); 
         }
 
         int textW = 0;
         int titleY = 20; 
-        if (gFontLarge) TTF_SizeUTF8(gFontLarge, "Tetra Conflict", &textW, NULL);
+        if (gFontLarge) 
+            TTF_SizeUTF8(gFontLarge, "Tetra Conflict", &textW, NULL);
         DrawText_Internal("Tetra Conflict", (w - textW) / 2, titleY, 255, 255, 255, gFontLarge);
 
         const char* promptMsg = "Xキーを押してください";
         int promptW = 0;
         int promptY = titleY + 60;
-        if (gFontName) TTF_SizeUTF8(gFontName, promptMsg, &promptW, NULL); 
+        if (gFontName) 
+            TTF_SizeUTF8(gFontName, promptMsg, &promptW, NULL); 
         DrawText_Internal(promptMsg, (w - promptW) / 2, promptY, 255, 200, 0, gFontName);
 
         DrawText_Internal("参加者:", (w / 2) - 100, h / 2, 255, 255, 255, gFontName);
         int baseY = h / 2 + 40;
         int lineH = 40; 
-        for (int i = 0; i < 4; i++){ 
+        for (int i = 0; i < 4; i++)
+        { 
             if (i >= gClientCount) 
                 continue;
             int iconSize = 48;
@@ -342,22 +380,28 @@ void DrawImageAndText(void){
             int nameX = (w / 2) - 100;
             int nameY = baseY + i * lineH;
             const char* nameToDraw = (i < gClientCount) ? gAllClientNames[i] : "";
-	    if (gPlayerTextures[i]) {
+	    if (gPlayerTextures[i]) 
+        {
                         SDL_Rect dst = { iconX, iconY, iconSize, iconSize };
                         SDL_RenderCopy(gMainRenderer, gPlayerTextures[i], NULL, &dst);
                 }
             DrawText_Internal(nameToDraw, nameX, nameY, 255, 255, 255, gFontName);
 
-            if (i < gClientCount && gXPressedFlags[i] == 1){
+            if (i < gClientCount && gXPressedFlags[i] == 1)
+            {
                 DrawText_Internal(" X Pressed", nameX + 200, nameY, 255, 200, 0, gFontName);
             }
         }
     }
-    else if (gCurrentScreenState == SCREEN_STATE_GAME_SCREEN){
-        /* --- 武器選択画面の描画 --- */
-        if (gBackgroundTexture) {
+    else if (gCurrentScreenState == SCREEN_STATE_GAME_SCREEN)
+    {
+        
+        if (gBackgroundTexture) 
+        {
             SDL_RenderCopy(gMainRenderer, gBackgroundTexture, NULL, NULL);
-        } else { 
+        } 
+        else 
+        { 
             SDL_SetRenderDrawColor(gMainRenderer, 0, 100, 0, 255); 
             SDL_RenderFillRect(gMainRenderer, NULL); 
         }
@@ -373,7 +417,8 @@ void DrawImageAndText(void){
         int mx, my;
         SDL_GetMouseState(&mx, &my);
 
-        for (int i = 0; i < MAX_WEAPONS; i++) {
+        for (int i = 0; i < MAX_WEAPONS; i++) 
+        {
             SDL_Rect r;
             if (i == 0) 
                 { r.x = leftX;  r.y = topY; }
@@ -391,7 +436,8 @@ void DrawImageAndText(void){
 
             int isHover = (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h);
             Uint8 rColor = baseR, gColor = baseG, bColor = baseB;
-            if (isHover || gSelectedWeaponID == i) {
+            if (isHover || gSelectedWeaponID == i) 
+            {
                 rColor = hoverR; gColor = hoverG; bColor = hoverB;
             }
 
@@ -400,7 +446,8 @@ void DrawImageAndText(void){
 
             int textPadding = 10;
             int lineHeight = 22; 
-            for (int j = 0; j < MAX_STATS_PER_WEAPON; j++) {   
+            for (int j = 0; j < MAX_STATS_PER_WEAPON; j++) 
+            {   
             char statText[64];
             sprintf(statText, "%s: %d", gStatNames[j], gWeaponStats[i][j]);
             DrawText_Internal(statText, r.x + textPadding, r.y + textPadding + (j * lineHeight), 255, 255, 255, gFontNormal);
@@ -416,18 +463,22 @@ void DrawImageAndText(void){
             else if (i == 3) 
                 iconToDraw = gGreenWeaponIconTexture; 
 
-            if (iconToDraw) {
+            if (iconToDraw) 
+            {
                 int iconW = 150, iconH = 64, margin = 10; 
                 SDL_Rect destRect = { r.x + textPadding, r.y + r.h - iconH - margin, iconW, iconH }; 
                 SDL_RenderCopy(gMainRenderer, iconToDraw, NULL, &destRect);
             }
         }
     }
-    else if (gCurrentScreenState == SCREEN_STATE_RESULT) {
-        /* --- メインゲーム（バトル）画面の描画 --- */
-        if (gResultTexture) {
+    else if (gCurrentScreenState == SCREEN_STATE_RESULT) 
+    {
+        if (gResultTexture) 
+        {
             SDL_RenderCopy(gMainRenderer, gResultTexture, NULL, NULL);
-        } else {
+        } 
+        else 
+        {
             SDL_SetRenderDrawColor(gMainRenderer, 153, 204, 0, 255); 
             SDL_RenderFillRect(gMainRenderer, NULL); 
         }
@@ -440,7 +491,8 @@ void DrawImageAndText(void){
             int cell_w = w / cols;
             int cell_h = h / rows;
 
-            for (int i = 0; i < blockCount; i++) {
+            for (int i = 0; i < blockCount; i++) 
+            {
                 int r = i / cols;
                 int c = i % cols;
 
@@ -450,9 +502,12 @@ void DrawImageAndText(void){
                 blockRect.w = blockSize;
                 blockRect.h = blockSize;
 
-                if (gWallTexture) {
+                if (gWallTexture) 
+                {
                     SDL_RenderCopy(gMainRenderer, gWallTexture, NULL, &blockRect);
-                } else {
+                } 
+                else 
+                {
                     SDL_SetRenderDrawColor(gMainRenderer, 100, 100, 100, 255);
                     SDL_RenderFillRect(gMainRenderer, &blockRect);
                     SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 255, 255);
@@ -461,7 +516,8 @@ void DrawImageAndText(void){
             }
         }
 
-        if (gTrapActive) {
+        if (gTrapActive) 
+        {
             SDL_Rect tr = { gTrapX, gTrapY, 80, 80 };
             if (gTrapType == TRAP_TYPE_HEAL) 
                 SDL_SetRenderDrawColor(gMainRenderer, 255, 255, 0, 255);
@@ -478,37 +534,45 @@ void DrawImageAndText(void){
 
         char modeMsg[64];
         if (gControlMode == MODE_MOVE) 
-            sprintf(modeMsg, "MODE: 移動 (Cキーで発射モードへ)");
+            sprintf(modeMsg, "MODE: 移動 (Cキー(Bボタン)で発射モードへ)");
         else 
-            sprintf(modeMsg, "MODE: 発射 (Cキーで移動モードへ)");
+            sprintf(modeMsg, "MODE: 発射 (Cキー(Bボタン)で移動モードへ)");
 
         DrawText_Internal(modeMsg, 10, 10, 255, 255, 0, gFontNormal);
 
-        /* --- 制限時間タイマー表示（画面上部中央） --- */
-        if (gBattleTimerActive) {
+        //制限時間タイマー表示（画面上部中央）
+        if (gBattleTimerActive) 
+        {
             Uint32 now = SDL_GetTicks();
             int remainSec = (int)((BATTLE_TIME_LIMIT_MS - (int)(now - gBattleStartTime) + 999) / 1000);
-            if (remainSec < 0) remainSec = 0;
-            if (remainSec > 60) remainSec = 60;
+            if (remainSec < 0) 
+                remainSec = 0;
+            if (remainSec > 60) 
+                remainSec = 60;
 
             char timerStr[64];
             sprintf(timerStr, "TIME: %d", remainSec);
 
             int tW = 0, tH = 0;
-            if (gFontNormal) {
+            if (gFontNormal) 
+            {
                 TTF_SizeUTF8(gFontNormal, timerStr, &tW, &tH);
                 DrawText_Internal(timerStr, (w - tW) / 2, 10, 255, 255, 255, gFontNormal);
             }
         }
 
         const int SQ_SIZE = 50; 
-        for (int i = 0; i < gClientCount; i++) {
+        for (int i = 0; i < gClientCount; i++) 
+        {
             int currentHP = gPlayerHP[i]; 
             SDL_Rect playerRect = { gPlayerPosX[i], gPlayerPosY[i], SQ_SIZE, SQ_SIZE };
             Uint8 r = 0, g = 0, b = 0;
-            if (currentHP <= 0) {
+            if (currentHP <= 0) 
+            {
                 r = 128; g = 128; b = 128;
-            } else {
+            } 
+            else 
+            {
                 if (i == 0)      
                     { r = 255; g = 0;   b = 0;   }
                 else if (i == 1) 
@@ -521,8 +585,8 @@ void DrawImageAndText(void){
 
 	    SDL_RenderCopy(gMainRenderer, gPlayerTextures[i], NULL, &playerRect);
             
-            if (currentHP > 0) {
-                /* HP数値の表示 */
+            if (currentHP > 0) 
+            {
                 char hpText[16];
                 sprintf(hpText, "HP: %d", currentHP);
                 Uint8 textR = 255, textG = 255, textB = 255;
@@ -530,16 +594,14 @@ void DrawImageAndText(void){
                     { textR = 255; textG = 0; textB = 0; }
                     
                 DrawText_Internal(hpText, gPlayerPosX[i], gPlayerPosY[i] - 20, textR, textG, textB, gFontNormal);
-
-                /* クールタイム数値の表示 (自機のみ) */
-                if (i == gMyClientID) {
+                if (i == gMyClientID) 
+                {
                     Uint32 currentTime = SDL_GetTicks();
                     int weaponID = (gSelectedWeaponID < 0) ? 0 : gSelectedWeaponID;
                     int totalCT = gWeaponStats[weaponID][STAT_CT_TIME];
                     Uint32 elapsed = currentTime - gLastFireTime;
-
-                    // クールタイム中のみ数値を表示
-                    if (elapsed < (Uint32)totalCT) {
+                    if (elapsed < (Uint32)totalCT) 
+                    {
                         float remaining = (float)(totalCT - elapsed) / 1000.0f;
                         char ctText[32]; 
                         sprintf(ctText, "%.1fs", remaining);
@@ -549,12 +611,14 @@ void DrawImageAndText(void){
             }
         }
         UpdateAndDrawProjectiles();
-        /* カウントダウン表示 */
-        if (gCountdownValue > 0) {
+        // カウントダウン表示 
+        if (gCountdownValue > 0) 
+        {
             Uint32 currentTime = SDL_GetTicks();
             Uint32 elapsed = currentTime - gCountdownStartTime;
 
-            if (elapsed < 3000) {
+            if (elapsed < 3000) 
+            {
                 // 残り秒数を計算 (3, 2, 1)
                 gCountdownValue = 3 - (elapsed / 1000);
                 
@@ -562,18 +626,22 @@ void DrawImageAndText(void){
                 sprintf(countStr, "%d", gCountdownValue);
                 
                 int textW = 0, textH = 0;
-                if (gFontCountdown) {
-            TTF_SizeUTF8(gFontCountdown, countStr, &textW, &textH);
+                if (gFontCountdown) 
+                {
+                TTF_SizeUTF8(gFontCountdown, countStr, &textW, &textH);
 
-            DrawText_Internal(countStr, (w - textW) / 2, (h - textH) / 2, 0, 0, 0, gFontCountdown);
-        }
-            } else {
+                DrawText_Internal(countStr, (w - textW) / 2, (h - textH) / 2, 0, 0, 0, gFontCountdown);
+            }
+            } 
+            else 
+            {
                 gCountdownValue = 0; // 3秒経過で終了
             }
         }
     }
-    else if (gCurrentScreenState == SCREEN_STATE_TITLE) {
-        /* --- 結果発表画面の描画 --- */
+    else if (gCurrentScreenState == SCREEN_STATE_TITLE) 
+    {
+        // 結果発表画面の描画 
         int rankedIDs[MAX_CLIENTS];
         GetRankedPlayerIDs(rankedIDs);
 
@@ -589,7 +657,8 @@ void DrawImageAndText(void){
             isDraw = 1;
 
         int titleBottomY = 0;
-        if (gFontLarge) {
+        if (gFontLarge) 
+        {
             int textW = 0, textH = 0;
             const char* titleMsg = isDraw ? "引き分け！ (DRAW)" : "結果発表!!";
             TTF_SizeUTF8(gFontLarge, titleMsg, &textW, &textH);
@@ -598,7 +667,8 @@ void DrawImageAndText(void){
         }
 
         int helpTextY = h - 40;
-        if (gFontNormal) {
+        if (gFontNormal) 
+        {
             const char* msg = "参加者全員がXボタンを押すと、ゲームが終了します。";
             int textW = 0, textH = 0;
             TTF_SizeUTF8(gFontNormal, msg, &textW, &textH);
@@ -611,9 +681,10 @@ void DrawImageAndText(void){
         int rectH = (availableHeight - spacing * (rectCount - 1)) / rectCount;
         int rectW = 450, startX = (w - rectW) / 2;
 
-        for (int i = 0; i < rectCount; i++) {
+        for (int i = 0; i < rectCount; i++) 
+        {
             int rectY = titleBottomY + topMargin + i * (rectH + spacing);
-	    int iconSize = rectH - 10;
+	        int iconSize = rectH - 10;
             int iconX = startX + 10;
             int iconY = rectY + (rectH - iconSize) / 2;
             int textBaseX = startX + iconSize + 25;
@@ -621,25 +692,26 @@ void DrawImageAndText(void){
             int displayRank = i + 1;
             if (i > 0 && gPlayerHP[rankedIDs[i]] == gPlayerHP[rankedIDs[i - 1]]) 
                 displayRank = i;
-
-	    if (gPlayerTextures[clientID]) {
+	    if (gPlayerTextures[clientID]) 
+        {
                     SDL_Rect iconRect = { iconX, iconY, iconSize, iconSize };
                     SDL_RenderCopy(gMainRenderer, gPlayerTextures[clientID], NULL, &iconRect);
-            }
+        }
 
             char rankText[16];
             sprintf(rankText, "%d位:", displayRank);
             int tw = 0, th = 0;
             TTF_SizeUTF8(gFontRank, rankText, &tw, &th);
-	    DrawText_Internal(rankText, textBaseX, rectY + (rectH - th) / 2, 0, 0, 255, gFontRank);
+	        DrawText_Internal(rankText, textBaseX, rectY + (rectH - th) / 2, 0, 0, 255, gFontRank);
 
             char nameAndHP[MAX_NAME_SIZE + 20]; 
             sprintf(nameAndHP, "%s (HP: %d)", gAllClientNames[clientID], gPlayerHP[clientID]);
             int nw = 0, nh = 0;
             TTF_SizeUTF8(gFontName, nameAndHP, &nw, &nh);
-	    DrawText_Internal(nameAndHP, textBaseX + tw + 20, rectY + (rectH - nh) / 2, 0, 0, 255, gFontName);
+	        DrawText_Internal(nameAndHP, textBaseX + tw + 20, rectY + (rectH - nh) / 2, 0, 0, 255, gFontName);
 
-            if (gXPressedFlags[clientID] == 1) {
+            if (gXPressedFlags[clientID] == 1) 
+            {
                 DrawText_Internal("X Pressed", startX + tw + nw + 310, rectY + (rectH - nh) / 2 + 25, 255, 0, 0, gFontName);
             }
         }
@@ -648,57 +720,62 @@ void DrawImageAndText(void){
 }
 SDL_Renderer* GetRenderer(void){ return gMainRenderer; }
 
-int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
+int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) 
+{
     int windowW = DEFAULT_WINDOW_WIDTH;
     int windowH = DEFAULT_WINDOW_HEIGHT;
     gMyClientID = clientID;
     gClientCount = num;
-    for (int i = 0; i < num; i++) {
+    for (int i = 0; i < num; i++) 
+    {
         strncpy(gAllClientNames[i], name[i], MAX_NAME_SIZE - 1);
         gAllClientNames[i][MAX_NAME_SIZE - 1] = '\0';
     }
 
-    /* --- 1. SDLの初期化に AUDIO を追加 --- */
+    //SDLの初期化に AUDIO を追加 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0 || !(IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG) & IMG_INIT_JPG)) 
         {
         fprintf(stderr, "SDL init failed: %s\n", SDL_GetError());
         return -1;
     }
 
-    /* --- 2. SDL_mixer の初期化 --- */
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+    // SDL_mixer の初期化 
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) 
+    {
         fprintf(stderr, "SDL_mixer init failed: %s\n", Mix_GetError());
-       
     }
     InitJoycon();
 
-    /* --- 3. 音声ファイルの読み込み --- */
+    //音声ファイルの読み込み 
     gSoundReady = Mix_LoadWAV("銃を構える.mp3");
-    if (gSoundReady == NULL) {
+    if (gSoundReady == NULL) 
+    {
         fprintf(stderr, "Failed to load sound! SDL_mixer Error: %s\n", Mix_GetError());
     }
 
     gSoundFire = Mix_LoadWAV("拳銃を撃つ.mp3");
-    if (gSoundFire == NULL) {
+    if (gSoundFire == NULL) 
+    {
         fprintf(stderr, "Failed to load fire sound! SDL_mixer Error: %s\n", Mix_GetError());
     }
 
-    if (TTF_Init() == -1) {
+    if (TTF_Init() == -1) 
+    {
         fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
     }
 
-    // --- フォント読み込み ---
+    // フォント読み込み 
     gFontLarge = TTF_OpenFont(FONT_PATH, 40);
     gFontNormal = TTF_OpenFont(FONT_PATH, 24);
-    
     gFontCountdown = TTF_OpenFont(FONT_PATH, 200);
     gFontRank = TTF_OpenFont(FONT_PATH, 36);
     gFontName = TTF_OpenFont(FONT_PATH, 36);
-    if (!gFontLarge || !gFontNormal) {
+    if (!gFontLarge || !gFontNormal) 
+    {
         fprintf(stderr, "Failed to load font: %s\n", TTF_GetError());
     }
 
-    // --- 画像読み込み（既存通り） ---
+    // 画像読み込み
     SDL_Surface *bg = IMG_Load(BACKGROUND_IMAGE);
     SDL_Surface *res = IMG_Load(RESULT_IMAGE);
     SDL_Surface *resBack = IMG_Load(RESULT_BACK_IMAGE);
@@ -740,10 +817,13 @@ int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
     if (p3) 
         { gPlayerTextures[3] = SDL_CreateTextureFromSurface(gMainRenderer, p3); SDL_FreeSurface(p3); }
 
-    if (wallSurf) {
+    if (wallSurf) 
+    {
         gWallTexture = SDL_CreateTextureFromSurface(gMainRenderer, wallSurf);
         SDL_FreeSurface(wallSurf);
-    } else {
+    } 
+    else 
+    {
         fprintf(stderr, "Failed to load wall image: %s\n", IMG_GetError());
     }
 
@@ -755,13 +835,23 @@ int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
     const int PADDING = 50;
     const int S_SIZE = SQ_SIZE;
 
-    for (int i = 0; i < gClientCount; i++) {
+    for (int i = 0; i < gClientCount; i++) 
+    {
         gPlayerMoveStep[i] = 10;
-        switch (i) {
-            case 0: gPlayerPosX[i] = PADDING; gPlayerPosY[i] = PADDING; break;
-            case 1: gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = h - PADDING - S_SIZE; break;
-            case 2: gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = PADDING; break;
-            case 3: gPlayerPosX[i] = PADDING; gPlayerPosY[i] = h - PADDING - S_SIZE; break;
+        switch (i) 
+        {
+            case 0: 
+                gPlayerPosX[i] = PADDING; gPlayerPosY[i] = PADDING; 
+                break;
+            case 1: 
+                gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = h - PADDING - S_SIZE; 
+                break;
+            case 2: 
+            gPlayerPosX[i] = w - PADDING - S_SIZE; gPlayerPosY[i] = PADDING; 
+                break;
+            case 3: 
+            gPlayerPosX[i] = PADDING; gPlayerPosY[i] = h - PADDING - S_SIZE; 
+                break;
         }
         gPlayerHP[i] = MAX_HP;
     }
@@ -770,11 +860,9 @@ int InitWindows(int clientID, int num, char name[][MAX_NAME_SIZE]) {
     return 0;
 }
 
-/* DestroyWindow: 終了処理 */
-void DestroyWindow(void){
+void DestroyWindow(void)
+{
     CleanupJoycon();
-
-    // TTF_CloseFont を維持
     if (gFontLarge) 
         TTF_CloseFont(gFontLarge);
     if (gFontNormal) 
@@ -808,15 +896,15 @@ void DestroyWindow(void){
     if (gWallTexture) 
         SDL_DestroyTexture(gWallTexture);
 
-    Mix_CloseAudio();
-    
+    Mix_CloseAudio();   
     IMG_Quit(); 
     TTF_Quit(); 
     SDL_Quit();
 }
 
-/* --- マウスとJoy-Con共通の武器選択処理 --- */
-void HandleWeaponSelection(int x, int y) {
+//マウスとJoy-Con共通の武器選択処理 
+void HandleWeaponSelection(int x, int y) 
+{
     if (gCurrentScreenState != SCREEN_STATE_GAME_SCREEN) 
         return;
 
@@ -831,12 +919,14 @@ void HandleWeaponSelection(int x, int y) {
     int bottomY = topY + rectH + P;
     int selectedID = -1;
 
-    if (x >= leftX && x < leftX + rectW) {
+    if (x >= leftX && x < leftX + rectW) 
+    {
         if (y >= topY && y < topY + rectH) 
             selectedID = 0;
         else if (y >= bottomY && y < bottomY + rectH) 
             selectedID = 2;
-    } else if (x >= rightX && x < rightX + rectW) 
+    } 
+    else if (x >= rightX && x < rightX + rectW) 
         {
         if (y >= topY && y < topY + rectH) 
             selectedID = 1;
@@ -844,7 +934,8 @@ void HandleWeaponSelection(int x, int y) {
             selectedID = 3;
         }
 
-    if (selectedID != -1 && gWeaponSent == 0) {
+    if (selectedID != -1 && gWeaponSent == 0) 
+    {
         gSelectedWeaponID = selectedID;
         DrawImageAndText();
         unsigned char data[MAX_DATA];
@@ -855,35 +946,43 @@ void HandleWeaponSelection(int x, int y) {
         gWeaponSent = 1;
     }
 }
-/* WindowEvent: 入力処理  */
-void WindowEvent(int num){
+
+void WindowEvent(int num)
+{
     ProcessJoyconInput();
-    /* --- バトル制限時間の進行と強制遷移 --- */
-    if (gCurrentScreenState == SCREEN_STATE_RESULT && gBattleTimerActive) {
+    //バトル制限時間の進行と強制遷移 
+    if (gCurrentScreenState == SCREEN_STATE_RESULT && gBattleTimerActive) 
+    {
         Uint32 now = SDL_GetTicks();
 
-        /* 60秒経過で強制的に結果発表画面へ */
-        if (now - gBattleStartTime >= BATTLE_TIME_LIMIT_MS) {
+        // 60秒経過で強制的に結果発表画面へ 
+        if (now - gBattleStartTime >= BATTLE_TIME_LIMIT_MS) 
+        {
             gBattleTimerActive = 0;
             SetScreenState(SCREEN_STATE_TITLE);
             return;
         }
 
-        /* タイマー表示を更新するため、一定間隔で再描画 */
-        if (now - gLastTimerRedraw >= 200) {
+        // タイマー表示を更新するため、一定間隔で再描画 
+        if (now - gLastTimerRedraw >= 200) 
+        {
             gLastTimerRedraw = now;
             DrawImageAndText();
         }
     }
     SDL_Event event;
-    if (SDL_PollEvent(&event)) {
-        if (gCurrentScreenState == SCREEN_STATE_RESULT && gCountdownValue > 0) {
-            if (event.type != SDL_QUIT) {
+    if (SDL_PollEvent(&event)) 
+    {
+        if (gCurrentScreenState == SCREEN_STATE_RESULT && gCountdownValue > 0) 
+        {
+            if (event.type != SDL_QUIT) 
+            {
                 return; 
             }
         }
 
-        switch (event.type) {
+        switch (event.type) 
+        {
             case SDL_QUIT:
                 gXPressedFlags[gMyClientID] = 1;
                 DrawImageAndText();
@@ -905,7 +1004,8 @@ void WindowEvent(int num){
                     SendEndCommand();
                 }
 
-                if (gCurrentScreenState == SCREEN_STATE_RESULT) {   
+                if (gCurrentScreenState == SCREEN_STATE_RESULT) 
+                {   
                     if (gPlayerHP[gMyClientID] <= 0) 
                     {
                         break; 
@@ -976,10 +1076,12 @@ void WindowEvent(int num){
                                 else if (state[SDL_SCANCODE_RIGHT]) 
                                     fireDirection = DIR_RIGHT;
                                 
-                                if (fireDirection != 0) {
+                                if (fireDirection != 0) 
+                                {
                                     SendFireCommand(fireDirection);
                                     gLastFireTime = currentTime;
-                                    if (gSoundFire != NULL) {
+                                    if (gSoundFire != NULL) 
+                                    {
                                         Mix_PlayChannel(-1, gSoundFire, 0);
                                     }
                                 }
@@ -1004,13 +1106,15 @@ void WindowEvent(int num){
 
 void SetPlayerMoveStep(int clientID, int step) 
 {
-    if (clientID < 0 || clientID >= MAX_CLIENTS) return;
+    if (clientID < 0 || clientID >= MAX_CLIENTS) 
+        return;
     gPlayerMoveStep[clientID] = step;
 }
 
 void SetXPressedFlag(int clientID)
 {
-    if (clientID < 0 || clientID >= MAX_CLIENTS) return;
+    if (clientID < 0 || clientID >= MAX_CLIENTS) 
+        return;
     gXPressedFlags[clientID] = 1;
     DrawImageAndText();
 }
@@ -1039,8 +1143,6 @@ void SetScreenState(int state)
         gCountdownValue = 3;
         gCountdownStartTime = SDL_GetTicks();
         gLastFireTime = SDL_GetTicks(); 
-
-        /* バトル開始時刻を記録（ここから60秒で強制遷移） */
         gBattleStartTime = SDL_GetTicks();
         gBattleTimerActive = 1;
         gLastTimerRedraw = 0;
@@ -1048,6 +1150,7 @@ void SetScreenState(int state)
     else if (state == SCREEN_STATE_TITLE) 
     {
         memset(gXPressedFlags, 0, sizeof(gXPressedFlags));
+        memset(gDeathTime, 0, sizeof(gDeathTime)); 
         gBattleTimerActive = 0;
     }
     DrawImageAndText(); 
@@ -1068,7 +1171,8 @@ void UpdatePlayerPos(int clientID, char direction)
     SDL_GetWindowSize(gMainWindow, &windowW, &windowH);
     const int SQ_SIZE = 50;   
 
-    switch (direction) {
+    switch (direction) 
+    {
         case DIR_UP:    
         newY = currentY - step; 
         break;
@@ -1118,7 +1222,8 @@ void UpdatePlayerPos(int clientID, char direction)
         int cell_w = windowW / cols;
         int cell_h = windowH / rows;
         SDL_Rect nextRect = { newX, newY, SQ_SIZE, SQ_SIZE };
-        for (int i = 0; i < blockCount; i++) {
+        for (int i = 0; i < blockCount; i++) 
+        {
             SDL_Rect blockRect;
             blockRect.x = (i % cols) * cell_w + (cell_w / 2) - (blockSize / 2);
             blockRect.y = (i / cols) * cell_h + (cell_h / 2) - (blockSize / 2);

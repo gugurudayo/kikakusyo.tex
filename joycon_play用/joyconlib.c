@@ -64,7 +64,6 @@ void ProcessJoyconInput() {
     if (joycon_get_state(&gJoycon) != JOYCON_ERR_NONE) 
     return;
 
-    // --- 1. 武器選択画面 (HOMEボタン左持ち・x座標反転修正) ---
     if (gCurrentScreenState == SCREEN_STATE_GAME_SCREEN) 
     {
         int mx, my;
@@ -73,13 +72,13 @@ void ProcessJoyconInput() {
         int speed = 15;
 
         if (gJoycon.stick.x < -th) 
-        my -= speed; // 上
+        my -= speed; 
         if (gJoycon.stick.x > th) 
-         my += speed; // 下
+         my += speed;
         if (gJoycon.stick.y > th) 
-         mx -= speed; // 左 (修正)
+         mx -= speed;  
         if (gJoycon.stick.y < -th) 
-        mx += speed; // 右 (修正)
+        mx += speed; 
 
         SDL_WarpMouseInWindow(gMainWindow, mx, my);
 

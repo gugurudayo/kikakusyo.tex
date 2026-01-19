@@ -12,10 +12,10 @@
 typedef struct {
     int x;
     int y;
-    int clientID; // 誰が撃ったか
-    int active;   // 1:有効, 0:無効
+    int clientID; 
+    int active;   
     char direction;
-    int distance;  // 飛距離管理用
+    int distance;  
 } Projectile;
 
 /* common_utf8.h に追記 */
@@ -52,7 +52,7 @@ typedef struct {
 #define STAT_CT_TIME 0 // クールタイム
 #define STAT_RANGE   1 // 飛距離
 #define STAT_DAMAGE  2 // 威力
-//#define STAT_RATE    3 // 連射数（リロードなしで撃てる数）
+
 #define DIR_UP    'U'
 #define DIR_DOWN  'D'
 #define DIR_LEFT  'L'

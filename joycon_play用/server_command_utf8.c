@@ -2,7 +2,7 @@
 
 #include "server_common_utf8.h"
 #include "server_func_utf8.h"
-#include "common_utf8.h"  // for TRAP_TYPE_*
+#include "common_utf8.h"  
 #include <arpa/inet.h>
 #include <SDL2/SDL.h>
 #include <string.h>
@@ -55,10 +55,8 @@ static int gClientWeaponID[MAX_CLIENTS];
 static int gServerInitialized = 0;
 
 static int gTrapActive = 0;   
-static int gTrapType = 0;     // ★追加 0:回復(黄), 1:ダメージ(赤)
+static int gTrapType = 0;     
 static SDL_Rect gTrapRect = {0, 0, 80, 80}; 
-    // --- Status effects (DoT/HoT) ---
-// effectAmount: +1 = damage per second, -1 = heal per second
 static int gEffectRemaining[MAX_CLIENTS] = {0};
 static int gEffectAmount[MAX_CLIENTS] = {0};
 static Uint32 gEffectNextTick[MAX_CLIENTS] = {0};
@@ -68,7 +66,8 @@ int gPlayerPosY[MAX_CLIENTS] = {0};
 static int GetMaxBulletByWeapon(int weaponID);
 static int CountPlayerBullets(int playerID);
 
-int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
+int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = 
+{
     { 1000, 400, 10},
     { 600, 200, 60},
     { 800, 1200, 40},
@@ -77,21 +76,21 @@ int gServerWeaponStats[MAX_WEAPONS][MAX_STATS_PER_WEAPON] = {
 extern CLIENT gClients[MAX_CLIENTS];
 extern int GetClientNum(void);
 
-static void SetIntData2DataBlock(void *data, int intData, int *dataSize) {
+static void SetIntData2DataBlock(void *data, int intData, int *dataSize) 
+{
     int tmp = htonl(intData);
     memcpy((char*)data + (*dataSize), &tmp, sizeof(int));
     (*dataSize) += sizeof(int);
 }
 
-static void SetCharData2DataBlock(void *data, char charData, int *dataSize) {
+static void SetCharData2DataBlock(void *data, char charData, int *dataSize) 
+{
     *(char *)((char*)data + (*dataSize)) = charData;
     (*dataSize) += sizeof(char);
 }
 
-/* ★ 解決1: HideTrap と SpawnTrap を呼び出し元より前に定義する ★ */
-
-// トラップを消す処理
-static Uint32 HideTrap(Uint32 interval, void *param) {
+static Uint32 HideTrap(Uint32 interval, void *param) 
+{
     gTrapActive = 0;
     unsigned char data[MAX_DATA];
     int ds = 0;
@@ -101,19 +100,19 @@ static Uint32 HideTrap(Uint32 interval, void *param) {
     return 0;
 }
 
-// トラップを出現させる処理
-// トラップを出現させる処理
-void SpawnTrap(void) {
-    if (gTrapActive) return;
+void SpawnTrap(void) 
+{
+    if (gTrapActive) 
+    return;
 
     int overlap;
-    int screenW = 1300; // DEFAULT_WINDOW_WIDTH
-    int screenH = 1000; // DEFAULT_WINDOW_HEIGHT
+    int screenW = 1300; 
+    int screenH = 1000; 
     int blockCols = 4;
     int blockRows = 2;
     int cellW = screenW / blockCols;
     int cellH = screenH / blockRows;
-    int blockSize = 150; // 壁のサイズ
+    int blockSize = 150; 
 
     do {
         overlap = 0;
@@ -122,14 +121,16 @@ void SpawnTrap(void) {
         gTrapRect.y = rand() % (screenH - 200) + 100;
 
         // 2. 8つの壁（正方形）との重なりチェック
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 8; i++) 
+        {
             int bx = (i % blockCols) * cellW + (cellW / 2) - (blockSize / 2);
             int by = (i / blockCols) * cellH + (cellH / 2) - (blockSize / 2);
 
             SDL_Rect blockRect = {bx, by, blockSize, blockSize};
             
             // SDL_HasIntersection を使ってトラップと壁が重なっているか判定
-            if (SDL_HasIntersection(&gTrapRect, &blockRect)) {
+            if (SDL_HasIntersection(&gTrapRect, &blockRect)) 
+            {
                 overlap = 1; // 重なったのでやり直し
                 break;
             }
@@ -149,11 +150,11 @@ void SpawnTrap(void) {
     SetIntData2DataBlock(data, gTrapRect.y, &ds); 
     SetIntData2DataBlock(data, gTrapType, &ds); 
     SendData(ALL_CLIENTS, data, ds);
-
     SDL_AddTimer(5000, HideTrap, NULL);
 }
 
-static Uint32 SendCommandAfterDelay(Uint32 interval, void *param) {
+static Uint32 SendCommandAfterDelay(Uint32 interval, void *param) 
+{
     TimerParam *p = (TimerParam*)param;
     unsigned char data[MAX_DATA];
     int ds = 0;
@@ -161,48 +162,52 @@ static Uint32 SendCommandAfterDelay(Uint32 interval, void *param) {
     SetCharData2DataBlock(data, p->cmd, &ds);
     SendData(ALL_CLIENTS, data, ds);
 
-    if (p->cmd == END_COMMAND) {
+    if (p->cmd == END_COMMAND) 
+    {
         SDL_Event event;
         SDL_zero(event);
         event.type = SDL_QUIT;
         SDL_PushEvent(&event);
     }
-
     free(param);
     return 0; 
 }
 
 /* 生存判定 */
-void CheckWinnerAndTransition(void) {
-    if (gBattleEndSent) return;
+void CheckWinnerAndTransition(void) 
+{
+    if (gBattleEndSent) 
+    return;
 
     int aliveCount = 0;
     int clientNum = GetClientNum();
 
-    for (int i = 0; i < clientNum; i++) {
-        if (gServerPlayerHP[i] > 0) aliveCount++;
+    for (int i = 0; i < clientNum; i++) 
+    {
+        if (gServerPlayerHP[i] > 0) 
+        aliveCount++;
     }
 
-    if (aliveCount <= 1) {
+    if (aliveCount <= 1) 
+    {
         gBattleEndSent = 1;
         printf("[SERVER] Battle End. Remaining: %d\n", aliveCount);
         
         TimerParam *tp = malloc(sizeof(TimerParam));
-        if (tp != NULL) {
+        if (tp != NULL) 
+        {
             tp->cmd = NEXT_SCREEN_COMMAND; 
             SDL_AddTimer(3000, SendCommandAfterDelay, tp);
         }
     }
 }
 
-static int CheckCollision(ServerProjectile *bullet, int playerID) {
+static int CheckCollision(ServerProjectile *bullet, int playerID) 
+{
     int px = gPlayerPosX[playerID];
     int py = gPlayerPosY[playerID];
 
-    return (bullet->x < px + PLAYER_SIZE && 
-            bullet->x + PROJECTILE_SIZE > px &&
-            bullet->y < py + PLAYER_SIZE && 
-            bullet->y + PROJECTILE_SIZE > py);
+    return (bullet->x < px + PLAYER_SIZE && bullet->x + PROJECTILE_SIZE > px && bullet->y < py + PLAYER_SIZE && bullet->y + PROJECTILE_SIZE > py);
 }
 
 static int CheckWallCollision(int x, int y)
@@ -217,17 +222,18 @@ static int CheckWallCollision(int x, int y)
 
     SDL_Rect bullet = { x, y, PROJECTILE_SIZE, PROJECTILE_SIZE };
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 8; i++) 
+    {
         int r = i / cols;
         int c = i % cols;
-
         int bx = c * cell_w + (cell_w / 2) - (blockSize / 2);
         int by = r * cell_h + (cell_h / 2) - (blockSize / 2);
 
         SDL_Rect block = { bx, by, blockSize, blockSize };
 
-        if (SDL_HasIntersection(&bullet, &block)) {
-            return 1; // 壁に当たった
+        if (SDL_HasIntersection(&bullet, &block)) 
+        {
+            return 1; 
         }
     }
     return 0;
@@ -236,29 +242,21 @@ static int CheckWallCollision(int x, int y)
 
 static Uint32 ServerGameLoop(Uint32 interval, void *param) {
     int numClients = GetClientNum();
+    Uint32 now = SDL_GetTicks();
 
-    // 1. トラップ抽選 (既存のまま)
-    if (!gTrapActive && rand() % 200 == 0) {
-        SpawnTrap();
-    }
+    // --- 1. トラップ発生 ---
+    if (!gTrapActive && rand() % 200 == 0) SpawnTrap();
 
-    // 2. トラップ判定 (既存のまま)
+    // --- 2. トラップ判定 & DoT/HoT処理 ---
     if (gTrapActive) {
         for (int i = 0; i < numClients; i++) {
             if (gServerPlayerHP[i] <= 0) continue;
             SDL_Rect playerRect = {gPlayerPosX[i], gPlayerPosY[i], PLAYER_SIZE, PLAYER_SIZE};
             if (SDL_HasIntersection(&playerRect, &gTrapRect)) {
-                // type 0/1: instant heal/damage (existing)
-                // type 2: poison DoT  (+1 per sec for 30 sec)
-                // type 3: hot spring HoT (-1 per sec for 30 sec)
                 if (gTrapType == TRAP_TYPE_POISON || gTrapType == TRAP_TYPE_HOTSPRING) {
-                    int amt = (gTrapType == TRAP_TYPE_POISON) ? 1 : -1;
-                    gEffectRemaining[i] = 30;                 // 30 seconds
-                    gEffectAmount[i] = amt;
-                    gEffectNextTick[i] = SDL_GetTicks() + 1000;
-
-                    // trigger feedback once (optional): send 0 so client can show something if it wants
-                    // (We keep protocol unchanged; DoT/HoT ticks will come every second as APPLY_DAMAGE_COMMAND.)
+                    gEffectRemaining[i] = 30;
+                    gEffectAmount[i] = (gTrapType == TRAP_TYPE_POISON) ? 1 : -1;
+                    gEffectNextTick[i] = now + 1000;
                 } else {
                     int amount = (gTrapType == TRAP_TYPE_HEAL) ? -20 : 30;
                     gServerPlayerHP[i] -= amount;
@@ -271,28 +269,17 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
                     SetIntData2DataBlock(data, i, &ds);
                     SetIntData2DataBlock(data, amount, &ds);
                     SendData(ALL_CLIENTS, data, ds);
-
-                    CheckWinnerAndTransition();
                 }
-
-
-                HideTrap(0, NULL);
-            
-                break; 
+                HideTrap(0, NULL); 
+                break;
             }
         }
     }
 
-        // 2.5. DoT/HoT tick (1 per second, 30 seconds)
-    Uint32 now = SDL_GetTicks();
+    // DoT/HoT 継続ダメージ処理
     for (int pid = 0; pid < numClients; pid++) {
-        if (gEffectRemaining[pid] <= 0) continue;
-        if (gServerPlayerHP[pid] <= 0) { // dead -> stop ticking
-            gEffectRemaining[pid] = 0;
-            continue;
-        }
-        if (now >= gEffectNextTick[pid]) {
-            int amount = gEffectAmount[pid]; // +1 dmg, -1 heal
+        if (gEffectRemaining[pid] > 0 && now >= gEffectNextTick[pid]) {
+            int amount = gEffectAmount[pid];
             gServerPlayerHP[pid] -= amount;
             if (gServerPlayerHP[pid] > 150) gServerPlayerHP[pid] = 150;
             if (gServerPlayerHP[pid] < 0) gServerPlayerHP[pid] = 0;
@@ -310,94 +297,93 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
         }
     }
 
-
-    // 3. 弾の処理 (修正ポイント)
+    // --- 3. 弾の処理 (同期安定化版) ---
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         if (!gServerProjectiles[i].active) continue;
 
         int sid = gServerProjectiles[i].firedByClientID;
         int weaponID = gClientWeaponID[sid];
-        
-        // ★ ステータスの取得
         int dmg = gServerWeaponStats[weaponID][STAT_DAMAGE];
         int maxRange = gServerWeaponStats[weaponID][STAT_RANGE]; 
-        
         char dir = gServerProjectiles[i].direction;
 
+        // 内部で20ピクセル分を一気に移動計算する
         for (int k = 0; k < SERVER_PROJECTILE_STEP; k++) {
+            int nextX = gServerProjectiles[i].x;
+            int nextY = gServerProjectiles[i].y;
 
-    int nextX = gServerProjectiles[i].x;
-    int nextY = gServerProjectiles[i].y;
+            if (dir == DIR_UP) nextY--;
+            else if (dir == DIR_DOWN) nextY++;
+            else if (dir == DIR_LEFT) nextX--;
+            else if (dir == DIR_RIGHT) nextX++;
+            else if (dir == DIR_UP_LEFT) { nextX--; nextY--; }
+            else if (dir == DIR_UP_RIGHT) { nextX++; nextY--; }
+            else if (dir == DIR_DOWN_LEFT) { nextX--; nextY++; }
+            else if (dir == DIR_DOWN_RIGHT) { nextX++; nextY++; }
 
-    // ① 次の座標を計算（まだ反映しない）
-    if (dir == DIR_UP) nextY--;
-    else if (dir == DIR_DOWN) nextY++;
-    else if (dir == DIR_LEFT) nextX--;
-    else if (dir == DIR_RIGHT) nextX++;
-    else if (dir == DIR_UP_LEFT)    { nextY--; nextX--; }
-    else if (dir == DIR_UP_RIGHT)   { nextY--; nextX++; }
-    else if (dir == DIR_DOWN_LEFT)  { nextY++; nextX--; }
-    else if (dir == DIR_DOWN_RIGHT) { nextY++; nextX++; }
-
-    // ② 先に壁判定
-    if (CheckWallCollision(nextX, nextY) ||
-    CheckWallCollision(nextX + PROJECTILE_SIZE - 1, nextY) ||
-    CheckWallCollision(nextX, nextY + PROJECTILE_SIZE - 1) ||
-    CheckWallCollision(nextX + PROJECTILE_SIZE - 1, nextY + PROJECTILE_SIZE - 1)) {
-    gServerProjectiles[i].active = 0;
-    break;
-}
-
-    // ③ 問題なければ移動を確定
-    gServerProjectiles[i].x = nextX;
-    gServerProjectiles[i].y = nextY;
-
-    // ④ 飛距離チェック
-    gServerProjectiles[i].distance++;
-    if (gServerProjectiles[i].distance >= maxRange) {
-        gServerProjectiles[i].active = 0;
-        break;
-    }
-
-    // ⑤ プレイヤー当たり判定
-    for (int j = 0; j < numClients; j++) {
-        if (j == sid || gServerPlayerHP[j] <= 0) continue;
-
-        if (CheckCollision(&gServerProjectiles[i], j)) {
-            gServerPlayerHP[j] -= dmg;
-            if (gServerPlayerHP[j] < 0) gServerPlayerHP[j] = 0;
-
-            unsigned char data[MAX_DATA];
-            int ds = 0;
-            SetCharData2DataBlock(data, APPLY_DAMAGE_COMMAND, &ds);
-            SetIntData2DataBlock(data, j, &ds);
-            SetIntData2DataBlock(data, dmg, &ds);
-            SendData(ALL_CLIENTS, data, ds);
-
-            gServerProjectiles[i].active = 0;
-            CheckWinnerAndTransition();
-            break;
-        }
-    }
-
-    if (!gServerProjectiles[i].active) break;
-}
-
-
-        // 画面外判定
-        if (gServerProjectiles[i].active) {
-            if (gServerProjectiles[i].y < -100 || gServerProjectiles[i].y > 1500 || 
-                gServerProjectiles[i].x < -100 || gServerProjectiles[i].x > 1500) {
-                gServerProjectiles[i].active = 0;
+            // 壁判定
+            if (CheckWallCollision(nextX, nextY)) { 
+                gServerProjectiles[i].active = 0; 
+                break; 
             }
+
+            gServerProjectiles[i].x = nextX;
+            gServerProjectiles[i].y = nextY;
+            gServerProjectiles[i].distance++;
+
+            // プレイヤー当たり判定
+            for (int j = 0; j < numClients; j++) {
+                if (j == sid || gServerPlayerHP[j] <= 0) continue;
+                if (CheckCollision(&gServerProjectiles[i], j)) {
+                    gServerPlayerHP[j] -= dmg;
+                    unsigned char d[MAX_DATA];
+                    int dds = 0;
+                    SetCharData2DataBlock(d, APPLY_DAMAGE_COMMAND, &dds);
+                    SetIntData2DataBlock(d, j, &dds);
+                    SetIntData2DataBlock(d, dmg, &dds);
+                    SendData(ALL_CLIENTS, d, dds);
+
+                    gServerProjectiles[i].active = 0;
+                    CheckWinnerAndTransition();
+                    break;
+                }
+            }
+
+            if (gServerProjectiles[i].distance >= maxRange) { 
+                gServerProjectiles[i].active = 0; 
+                break; 
+            }
+            if (!gServerProjectiles[i].active) break;
         }
+
+        // ★ 重要：kループの「外」で、このフレームの最終位置を1回だけ送信する ★
+        // これにより、パケットの送信頻度が安定し、全画面で速度が一致します
+        unsigned char data[MAX_DATA];
+        int ds = 0;
+        SetCharData2DataBlock(data, UPDATE_PROJECTILE_COMMAND, &ds);
+        SetIntData2DataBlock(data, sid, &ds); 
+        
+        if (gServerProjectiles[i].active) {
+            SetIntData2DataBlock(data, gServerProjectiles[i].x, &ds);
+            SetIntData2DataBlock(data, gServerProjectiles[i].y, &ds);
+        } else {
+            // 弾が消えた場合、画面外に座標を送ってクライアント側でも消去させる
+            SetIntData2DataBlock(data, -100, &ds);
+            SetIntData2DataBlock(data, -100, &ds);
+        }
+        SetCharData2DataBlock(data, dir, &ds);
+        SendData(ALL_CLIENTS, data, ds);
     }
+
     return interval; 
 }
 
-int ExecuteCommand(char command, int pos) {
-    if (!gServerInitialized) {
-        for (int i = 0; i < MAX_CLIENTS; i++) gClientWeaponID[i] = -1;
+int ExecuteCommand(char command, int pos) 
+{
+    if (!gServerInitialized) 
+    {
+        for (int i = 0; i < MAX_CLIENTS; i++) 
+        gClientWeaponID[i] = -1;
         gServerInitialized = 1;
     }
 
@@ -418,7 +404,8 @@ int ExecuteCommand(char command, int pos) {
             RecvIntData(pos, &sid);
             RecvIntData(pos, &state);
 
-            if (!gXPressedClientFlags[sid]) {
+            if (!gXPressedClientFlags[sid]) 
+            {
                 gXPressedClientFlags[sid] = 1;
                 gXPressedCount++;
             }
@@ -428,21 +415,31 @@ int ExecuteCommand(char command, int pos) {
             SetIntData2DataBlock(data, sid, &ds);
             SendData(ALL_CLIENTS, data, ds);
 
-            if (gXPressedCount == GetClientNum()) {
+            if (gXPressedCount == GetClientNum()) 
+            {
                 TimerParam *tp = malloc(sizeof(TimerParam));
-                if (tp != NULL) {
-                    if (state == SCREEN_STATE_LOBBY_WAIT) {
+                if (tp != NULL) 
+                {
+                    if (state == SCREEN_STATE_LOBBY_WAIT) 
+                    {
                         int num = GetClientNum();
-                        for (int i = 0; i < num; i++) {
-                            if (i == 0) { gPlayerPosX[i] = PADDING; gPlayerPosY[i] = PADDING; }
-                            else if (i == 1) { gPlayerPosX[i] = DEFAULT_WINDOW_WIDTH - PADDING - PLAYER_SIZE; gPlayerPosY[i] = DEFAULT_WINDOW_HEIGHT - PADDING - PLAYER_SIZE; }
-                            else if (i == 2) { gPlayerPosX[i] = DEFAULT_WINDOW_WIDTH - PADDING - PLAYER_SIZE; gPlayerPosY[i] = PADDING; }
-                            else { gPlayerPosX[i] = PADDING; gPlayerPosY[i] = DEFAULT_WINDOW_HEIGHT - PADDING - PLAYER_SIZE; }
+                        for (int i = 0; i < num; i++) 
+                        {
+                            if (i == 0) 
+                                { gPlayerPosX[i] = PADDING; gPlayerPosY[i] = PADDING; }
+                            else if (i == 1) 
+                                { gPlayerPosX[i] = DEFAULT_WINDOW_WIDTH - PADDING - PLAYER_SIZE; gPlayerPosY[i] = DEFAULT_WINDOW_HEIGHT - PADDING - PLAYER_SIZE; }
+                            else if (i == 2) 
+                                { gPlayerPosX[i] = DEFAULT_WINDOW_WIDTH - PADDING - PLAYER_SIZE; gPlayerPosY[i] = PADDING; }
+                            else 
+                                { gPlayerPosX[i] = PADDING; gPlayerPosY[i] = DEFAULT_WINDOW_HEIGHT - PADDING - PLAYER_SIZE; }
                             gServerPlayerHP[i] = 150; 
                         }
                         gBattleEndSent = 0;
                         tp->cmd = START_GAME_COMMAND;
-                    } else if (state == SCREEN_STATE_TITLE) {
+                    } 
+                    else if (state == SCREEN_STATE_TITLE) 
+                    {
                         tp->cmd = END_COMMAND;
                     }
                     SDL_AddTimer(3000, SendCommandAfterDelay, tp);
@@ -453,14 +450,17 @@ int ExecuteCommand(char command, int pos) {
             break;
         }
 
-        case SELECT_WEAPON_COMMAND: {
+        case SELECT_WEAPON_COMMAND: 
+        {
             int wid;
             RecvIntData(pos, &wid);
             gClientWeaponID[pos] = wid;
             gHandsCount++;
-            if (gHandsCount == GetClientNum()) {
+            if (gHandsCount == GetClientNum()) 
+            {
                 TimerParam *tp = malloc(sizeof(TimerParam));
-                if (tp != NULL) {
+                if (tp != NULL) 
+                {
                     tp->cmd = NEXT_SCREEN_COMMAND;
                     SDL_AddTimer(3000, SendCommandAfterDelay, tp);
                 }
@@ -469,7 +469,8 @@ int ExecuteCommand(char command, int pos) {
             break;
         }
 
-        case MOVE_COMMAND: {
+        case MOVE_COMMAND: 
+        {
             char d;
             RecvCharData(pos, &d);
             
@@ -478,14 +479,22 @@ int ExecuteCommand(char command, int pos) {
             int nextY = gPlayerPosY[pos];
 
             // 1. 移動後の暫定座標を計算
-            if (d == DIR_UP)         { nextY -= step; }
-            else if (d == DIR_DOWN)  { nextY += step; }
-            else if (d == DIR_LEFT)  { nextX -= step; }
-            else if (d == DIR_RIGHT) { nextX += step; }
-            else if (d == DIR_UP_LEFT)    { nextY -= step; nextX -= step; }
-            else if (d == DIR_UP_RIGHT)   { nextY -= step; nextX += step; }
-            else if (d == DIR_DOWN_LEFT)  { nextY += step; nextX -= step; }
-            else if (d == DIR_DOWN_RIGHT) { nextY += step; nextX += step; }
+            if (d == DIR_UP)         
+                { nextY -= step; }
+            else if (d == DIR_DOWN)  
+                { nextY += step; }
+            else if (d == DIR_LEFT)  
+                { nextX -= step; }
+            else if (d == DIR_RIGHT) 
+                { nextX += step; }
+            else if (d == DIR_UP_LEFT)    
+                { nextY -= step; nextX -= step; }
+            else if (d == DIR_UP_RIGHT)   
+                { nextY -= step; nextX += step; }
+            else if (d == DIR_DOWN_LEFT)  
+                { nextY += step; nextX -= step; }
+            else if (d == DIR_DOWN_RIGHT) 
+                { nextY += step; nextX += step; }
 
             // 2. 8つの正方形（壁）との当たり判定
             int canMove = 1;

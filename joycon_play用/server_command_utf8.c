@@ -29,6 +29,7 @@ const int PADDING = 50;
 #define UPPER_RIGHT 1
 #define LOWER_RIGHT 4
 
+#define BATTLE_TIME_LIMIT_MS 60000
 typedef struct {
     int x;
     int y;
@@ -42,7 +43,6 @@ typedef struct {
     unsigned char cmd;
 } TimerParam;
 
-/* グローバル状態 */
 static int gServerPlayerHP[MAX_CLIENTS]; 
 static int gBattleEndSent = 0;           
 static char gClientHands[MAX_CLIENTS] = {0};
@@ -53,7 +53,8 @@ static int gActiveProjectileCount = 0;
 static ServerProjectile gServerProjectiles[MAX_PROJECTILES];
 static int gClientWeaponID[MAX_CLIENTS]; 
 static int gServerInitialized = 0;
-
+static int gDeathOrder[MAX_CLIENTS];
+static int gDeathCount = 0;
 static int gTrapActive = 0;   
 static int gTrapType = 0;     
 static SDL_Rect gTrapRect = {0, 0, 80, 80}; 
@@ -61,11 +62,8 @@ static int gEffectRemaining[MAX_CLIENTS] = {0};
 static int gEffectAmount[MAX_CLIENTS] = {0};
 static Uint32 gEffectNextTick[MAX_CLIENTS] = {0};
 
-/* --- バトル制限時間（60秒） --- */
-#define BATTLE_TIME_LIMIT_MS 60000
-static int gPendingBattleStart = 0; /* NEXT_SCREEN_COMMAND が「武器選択→バトル開始」の遷移かどうか */
+static int gPendingBattleStart = 0;
 static Uint32 BattleTimeout(Uint32 interval, void *param);
-
 
 int gPlayerPosX[MAX_CLIENTS] = {0}; 
 int gPlayerPosY[MAX_CLIENTS] = {0};
@@ -122,29 +120,26 @@ void SpawnTrap(void)
 
     do {
         overlap = 0;
-        // 1. ランダムに座標を決定
+       
         gTrapRect.x = rand() % (screenW - 200) + 100;
         gTrapRect.y = rand() % (screenH - 200) + 100;
 
-        // 2. 8つの壁（正方形）との重なりチェック
+     
         for (int i = 0; i < 8; i++) 
         {
             int bx = (i % blockCols) * cellW + (cellW / 2) - (blockSize / 2);
             int by = (i / blockCols) * cellH + (cellH / 2) - (blockSize / 2);
 
             SDL_Rect blockRect = {bx, by, blockSize, blockSize};
-            
-            // SDL_HasIntersection を使ってトラップと壁が重なっているか判定
+          
             if (SDL_HasIntersection(&gTrapRect, &blockRect)) 
             {
-                overlap = 1; // 重なったのでやり直し
+                overlap = 1; 
                 break;
             }
         }
-        // 重なっている間はループ（再抽選）を繰り返す
+     
     } while (overlap);
-
-    // 確定した座標でトラップを有効化
     gTrapActive = 1;
     gTrapType = rand() % 4; 
 
@@ -168,7 +163,6 @@ static Uint32 SendCommandAfterDelay(Uint32 interval, void *param)
     SetCharData2DataBlock(data, p->cmd, &ds);
     SendData(ALL_CLIENTS, data, ds);
 
-    /* 武器選択完了→バトル開始の遷移なら、このタイミングで60秒タイマーを開始 */
     if (p->cmd == NEXT_SCREEN_COMMAND && gPendingBattleStart) {
         gPendingBattleStart = 0;
         SDL_AddTimer(BATTLE_TIME_LIMIT_MS, BattleTimeout, NULL);
@@ -186,13 +180,13 @@ static Uint32 SendCommandAfterDelay(Uint32 interval, void *param)
     return 0; 
 }
 
-/* バトル開始から60秒経過したら強制的に結果発表へ遷移させる */
 static Uint32 BattleTimeout(Uint32 interval, void *param)
 {
     (void)interval;
     (void)param;
 
-    if (gBattleEndSent) {
+    if (gBattleEndSent) 
+    {
         return 0;
     }
 
@@ -206,7 +200,6 @@ static Uint32 BattleTimeout(Uint32 interval, void *param)
     return 0;
 }
 
-/* 生存判定 */
 void CheckWinnerAndTransition(void) 
 {
     if (gBattleEndSent) 
@@ -277,24 +270,38 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
     int numClients = GetClientNum();
     Uint32 now = SDL_GetTicks();
 
-    // --- 1. トラップ発生 ---
+ 
     if (!gTrapActive && rand() % 200 == 0) SpawnTrap();
 
-    // --- 2. トラップ判定 & DoT/HoT処理 ---
-    if (gTrapActive) {
-        for (int i = 0; i < numClients; i++) {
-            if (gServerPlayerHP[i] <= 0) continue;
+    if (gTrapActive) 
+    {
+        for (int i = 0; i < numClients; i++) 
+        {
+            if (gServerPlayerHP[i] <= 0) 
+                continue;
             SDL_Rect playerRect = {gPlayerPosX[i], gPlayerPosY[i], PLAYER_SIZE, PLAYER_SIZE};
-            if (SDL_HasIntersection(&playerRect, &gTrapRect)) {
-                if (gTrapType == TRAP_TYPE_POISON || gTrapType == TRAP_TYPE_HOTSPRING) {
+            if (SDL_HasIntersection(&playerRect, &gTrapRect)) 
+            {
+                if (gTrapType == TRAP_TYPE_POISON || gTrapType == TRAP_TYPE_HOTSPRING) 
+                {
                     gEffectRemaining[i] = 30;
                     gEffectAmount[i] = (gTrapType == TRAP_TYPE_POISON) ? 1 : -1;
                     gEffectNextTick[i] = now + 1000;
-                } else {
+                } 
+                else 
+                {
                     int amount = (gTrapType == TRAP_TYPE_HEAL) ? -20 : 30;
                     gServerPlayerHP[i] -= amount;
-                    if (gServerPlayerHP[i] > 150) gServerPlayerHP[i] = 150;
-                    if (gServerPlayerHP[i] < 0) gServerPlayerHP[i] = 0;
+                    if (gServerPlayerHP[i] > 150) 
+                        gServerPlayerHP[i] = 150;
+                    if (gServerPlayerHP[i] < 0) 
+                        gServerPlayerHP[i] = 0;
+
+                    if (gServerPlayerHP[i] <= 0 && gDeathOrder[i] == 0) 
+                    {
+                        gDeathCount++;
+                        gDeathOrder[i] = gDeathCount;
+                    }
 
                     unsigned char data[MAX_DATA];
                     int ds = 0;
@@ -309,13 +316,21 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
         }
     }
 
-    // DoT/HoT 継続ダメージ処理
-    for (int pid = 0; pid < numClients; pid++) {
-        if (gEffectRemaining[pid] > 0 && now >= gEffectNextTick[pid]) {
+    for (int pid = 0; pid < numClients; pid++) 
+    {
+        if (gEffectRemaining[pid] > 0 && now >= gEffectNextTick[pid]) 
+        {
             int amount = gEffectAmount[pid];
             gServerPlayerHP[pid] -= amount;
-            if (gServerPlayerHP[pid] > 150) gServerPlayerHP[pid] = 150;
-            if (gServerPlayerHP[pid] < 0) gServerPlayerHP[pid] = 0;
+            if (gServerPlayerHP[pid] > 150) 
+                gServerPlayerHP[pid] = 150;
+            if (gServerPlayerHP[pid] < 0) 
+                gServerPlayerHP[pid] = 0;
+            if (gServerPlayerHP[pid] <= 0 && gDeathOrder[pid] == 0) 
+            {
+                gDeathCount++;
+                gDeathOrder[pid] = gDeathCount;
+            }
 
             unsigned char data[MAX_DATA];
             int ds = 0;
@@ -323,16 +338,16 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
             SetIntData2DataBlock(data, pid, &ds);
             SetIntData2DataBlock(data, amount, &ds);
             SendData(ALL_CLIENTS, data, ds);
-
             gEffectRemaining[pid]--;
             gEffectNextTick[pid] += 1000;
             CheckWinnerAndTransition();
         }
     }
 
-    // --- 3. 弾の処理 (同期安定化版) ---
-    for (int i = 0; i < MAX_PROJECTILES; i++) {
-        if (!gServerProjectiles[i].active) continue;
+    for (int i = 0; i < MAX_PROJECTILES; i++) 
+    {
+        if (!gServerProjectiles[i].active) 
+            continue;
 
         int sid = gServerProjectiles[i].firedByClientID;
         int weaponID = gClientWeaponID[sid];
@@ -340,22 +355,30 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
         int maxRange = gServerWeaponStats[weaponID][STAT_RANGE]; 
         char dir = gServerProjectiles[i].direction;
 
-        // 内部で20ピクセル分を一気に移動計算する
-        for (int k = 0; k < SERVER_PROJECTILE_STEP; k++) {
+        for (int k = 0; k < SERVER_PROJECTILE_STEP; k++) 
+        {
             int nextX = gServerProjectiles[i].x;
             int nextY = gServerProjectiles[i].y;
 
-            if (dir == DIR_UP) nextY--;
-            else if (dir == DIR_DOWN) nextY++;
-            else if (dir == DIR_LEFT) nextX--;
-            else if (dir == DIR_RIGHT) nextX++;
-            else if (dir == DIR_UP_LEFT) { nextX--; nextY--; }
-            else if (dir == DIR_UP_RIGHT) { nextX++; nextY--; }
-            else if (dir == DIR_DOWN_LEFT) { nextX--; nextY++; }
-            else if (dir == DIR_DOWN_RIGHT) { nextX++; nextY++; }
+            if (dir == DIR_UP) 
+                nextY--;
+            else if (dir == DIR_DOWN) 
+                nextY++;
+            else if (dir == DIR_LEFT) 
+                nextX--;
+            else if (dir == DIR_RIGHT) 
+                nextX++;
+            else if (dir == DIR_UP_LEFT) 
+                { nextX--; nextY--; }
+            else if (dir == DIR_UP_RIGHT) 
+                { nextX++; nextY--; }
+            else if (dir == DIR_DOWN_LEFT) 
+                { nextX--; nextY++; }
+            else if (dir == DIR_DOWN_RIGHT) 
+                { nextX++; nextY++; }
 
-            // 壁判定
-            if (CheckWallCollision(nextX, nextY)) { 
+            if (CheckWallCollision(nextX, nextY)) 
+            { 
                 gServerProjectiles[i].active = 0; 
                 break; 
             }
@@ -365,41 +388,53 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
             gServerProjectiles[i].distance++;
 
             // プレイヤー当たり判定
-            for (int j = 0; j < numClients; j++) {
-                if (j == sid || gServerPlayerHP[j] <= 0) continue;
-                if (CheckCollision(&gServerProjectiles[i], j)) {
+            for (int j = 0; j < numClients; j++) 
+            {
+                if (j == sid || gServerPlayerHP[j] <= 0) 
+                    continue;
+                if (CheckCollision(&gServerProjectiles[i], j)) 
+                {
                     gServerPlayerHP[j] -= dmg;
+
+                    if (gServerPlayerHP[j] < 0) 
+                        gServerPlayerHP[j] = 0; 
+                    if (gServerPlayerHP[j] <= 0 && gDeathOrder[j] == 0) 
+                    {
+                        gDeathCount++;
+                        gDeathOrder[j] = gDeathCount;
+                    }
                     unsigned char d[MAX_DATA];
                     int dds = 0;
                     SetCharData2DataBlock(d, APPLY_DAMAGE_COMMAND, &dds);
                     SetIntData2DataBlock(d, j, &dds);
                     SetIntData2DataBlock(d, dmg, &dds);
                     SendData(ALL_CLIENTS, d, dds);
-
                     gServerProjectiles[i].active = 0;
                     CheckWinnerAndTransition();
                     break;
                 }
             }
-
-            if (gServerProjectiles[i].distance >= maxRange) { 
+            if (gServerProjectiles[i].distance >= maxRange) 
+            { 
                 gServerProjectiles[i].active = 0; 
                 break; 
             }
-            if (!gServerProjectiles[i].active) break;
+            if (!gServerProjectiles[i].active) 
+                break;
         }
 
-        // ★ 重要：kループの「外」で、このフレームの最終位置を1回だけ送信する ★
-        // これにより、パケットの送信頻度が安定し、全画面で速度が一致します
         unsigned char data[MAX_DATA];
         int ds = 0;
         SetCharData2DataBlock(data, UPDATE_PROJECTILE_COMMAND, &ds);
         SetIntData2DataBlock(data, sid, &ds); 
         
-        if (gServerProjectiles[i].active) {
+        if (gServerProjectiles[i].active) 
+        {
             SetIntData2DataBlock(data, gServerProjectiles[i].x, &ds);
             SetIntData2DataBlock(data, gServerProjectiles[i].y, &ds);
-        } else {
+        } 
+        else 
+        {
             // 弾が消えた場合、画面外に座標を送ってクライアント側でも消去させる
             SetIntData2DataBlock(data, -100, &ds);
             SetIntData2DataBlock(data, -100, &ds);
@@ -407,7 +442,6 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
         SetCharData2DataBlock(data, dir, &ds);
         SendData(ALL_CLIENTS, data, ds);
     }
-
     return interval; 
 }
 
@@ -424,7 +458,8 @@ int ExecuteCommand(char command, int pos)
     int ds = 0;
     int endFlag = 1;
 
-    switch(command) {
+    switch(command) 
+    {
         case END_COMMAND:
             ds = 0;
             SetCharData2DataBlock(data, END_COMMAND, &ds);
@@ -432,7 +467,8 @@ int ExecuteCommand(char command, int pos)
             endFlag = 0;
             break;
 
-        case X_COMMAND: {
+        case X_COMMAND: 
+        {
             int sid, state;
             RecvIntData(pos, &sid);
             RecvIntData(pos, &state);
@@ -491,7 +527,6 @@ int ExecuteCommand(char command, int pos)
             gHandsCount++;
             if (gHandsCount == GetClientNum()) 
             {
-                /* 次の NEXT_SCREEN_COMMAND は「武器選択→バトル開始」なのでタイマー開始対象 */
                 gPendingBattleStart = 1;
                 TimerParam *tp = malloc(sizeof(TimerParam));
                 if (tp != NULL) 
@@ -531,20 +566,21 @@ int ExecuteCommand(char command, int pos)
             else if (d == DIR_DOWN_RIGHT) 
                 { nextY += step; nextX += step; }
 
-            // 2. 8つの正方形（壁）との当たり判定
+            // 8つの正方形（壁）との当たり判定
             int canMove = 1;
             
             // クライアントの描画(client_win_utf8.c)と完全に一致させる定数
-            int screenW = 1300; // DEFAULT_WINDOW_WIDTH
-            int screenH = 1000; // DEFAULT_WINDOW_HEIGHT
+            int screenW = 1300; 
+            int screenH = 1000; 
             int cols = 4;
             int rows = 2;
             int cell_w = screenW / cols;
             int cell_h = screenH / rows;
-            int bSize = 150; // BLOCK_SIZE
-            int pSize = 50;  // PLAYER_SIZE (SQ_SIZE)
+            int bSize = 150; 
+            int pSize = 50;  
 
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < 8; i++) 
+            {
                 int r = i / cols;
                 int c = i % cols;
                 
@@ -553,29 +589,24 @@ int ExecuteCommand(char command, int pos)
                 int by = r * cell_h + (cell_h / 2) - (bSize / 2);
 
                 // AABB衝突判定（プレイヤーが正方形の範囲に少しでも重なったら衝突）
-                if (nextX < bx + bSize &&
-                    nextX + pSize > bx &&
-                    nextY < by + bSize &&
-                    nextY + pSize > by) {
+                if (nextX < bx + bSize && nextX + pSize > bx &&nextY < by + bSize &&nextY + pSize > by) 
+                {
                     canMove = 0; 
-                    // printf("[DEBUG] Collision with block %d at (%d, %d)\n", i, bx, by);
                     break;
                 }
             }
 
-            // 3. 画面外（ウィンドウ端）の判定も追加（念のため）
-            if (nextX < 0 || nextX + pSize > screenW || nextY < 0 || nextY + pSize > screenH) {
+            if (nextX < 0 || nextX + pSize > screenW || nextY < 0 || nextY + pSize > screenH) 
+            {
                 canMove = 0;
             }
-
-            // 4. 壁に当たっていなければ座標を更新
-            if (canMove) {
+            // 衝突していなければ座標を更新
+            if (canMove) 
+            {
                 gPlayerPosX[pos] = nextX;
                 gPlayerPosY[pos] = nextY;
             }
 
-            // 5. 全クライアントへ現在の確定座標を通知
-            // 注意：当たって動けなかった場合も、現在の座標を送ることでクライアント側の位置を補正します
             ds = 0;
             SetCharData2DataBlock(data, UPDATE_MOVE_COMMAND, &ds);
             SetIntData2DataBlock(data, pos, &ds);
@@ -584,7 +615,8 @@ int ExecuteCommand(char command, int pos)
             break;
         }
 
-        case FIRE_COMMAND: {
+        case FIRE_COMMAND: 
+        {
             int id, x, y;
             char d;
             RecvIntData(pos, &id);
@@ -594,28 +626,25 @@ int ExecuteCommand(char command, int pos)
 
             int weaponID = gClientWeaponID[id];
             
-            for (int i = 0; i < MAX_PROJECTILES; i++) {
-                if (!gServerProjectiles[i].active) {
+            for (int i = 0; i < MAX_PROJECTILES; i++) 
+            {
+                if (!gServerProjectiles[i].active) 
+                {
                     gServerProjectiles[i].x = x;
                     gServerProjectiles[i].y = y;
                     gServerProjectiles[i].firedByClientID = id;
                     gServerProjectiles[i].active = 1;
                     gServerProjectiles[i].direction = d;
-                    
-                    // ★ 重要：飛距離計算用のカウントをリセット
                     gServerProjectiles[i].distance = 0; 
                     break;
                 }
             }
 
-            // 初回発射時のみゲームループタイマーを開始
             static int ti = 0;
             if (!ti) {
                 SDL_AddTimer(16, ServerGameLoop, NULL);
                 ti = 1;
             }
-
-            // 全クライアントへ弾の生成を通知
             ds = 0;
             SetCharData2DataBlock(data, UPDATE_PROJECTILE_COMMAND, &ds);
             SetIntData2DataBlock(data, id, &ds);
@@ -632,21 +661,28 @@ int ExecuteCommand(char command, int pos)
 
 int GetMaxBulletByWeapon(int weaponID)
 {
-    switch(weaponID){
-    case 0: return UPPER_LEFT;
-    case 1: return UPPER_RIGHT;
-    case 2: return LOWER_LEFT;
-    case 3: return LOWER_RIGHT;
-    default: return 0;
+    switch(weaponID)
+    {
+    case 0: 
+        return UPPER_LEFT;
+    case 1: 
+        return UPPER_RIGHT;
+    case 2: 
+        return LOWER_LEFT;
+    case 3: 
+        return LOWER_RIGHT;
+    default: 
+        return 0;
     }
 }
 
 int CountPlayerBullets(int playerID)
 {
     int count = 0;
-for (int i = 0; i < MAX_PROJECTILES; i++){
-    if (gServerProjectiles[i].active &&
-        gServerProjectiles[i].firedByClientID == playerID) {
+for (int i = 0; i < MAX_PROJECTILES; i++)
+{
+    if (gServerProjectiles[i].active && gServerProjectiles[i].firedByClientID == playerID) 
+    {
         count++;
     }
 }

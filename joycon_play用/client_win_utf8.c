@@ -84,6 +84,12 @@ int gCountdownValue = -1;
 static Uint32 gCountdownStartTime = 0; 
 static int IsHitWall(SDL_Rect *rect);
 
+/* --- バトル制限時間（60秒） --- */
+#define BATTLE_TIME_LIMIT_MS 60000
+static Uint32 gBattleStartTime = 0;
+static int gBattleTimerActive = 0;
+static Uint32 gLastTimerRedraw = 0;
+
 extern int gTrapActive;
 extern int gTrapX;
 extern int gTrapY;
@@ -478,6 +484,23 @@ void DrawImageAndText(void){
 
         DrawText_Internal(modeMsg, 10, 10, 255, 255, 0, gFontNormal);
 
+        /* --- 制限時間タイマー表示（画面上部中央） --- */
+        if (gBattleTimerActive) {
+            Uint32 now = SDL_GetTicks();
+            int remainSec = (int)((BATTLE_TIME_LIMIT_MS - (int)(now - gBattleStartTime) + 999) / 1000);
+            if (remainSec < 0) remainSec = 0;
+            if (remainSec > 60) remainSec = 60;
+
+            char timerStr[64];
+            sprintf(timerStr, "TIME: %d", remainSec);
+
+            int tW = 0, tH = 0;
+            if (gFontNormal) {
+                TTF_SizeUTF8(gFontNormal, timerStr, &tW, &tH);
+                DrawText_Internal(timerStr, (w - tW) / 2, 10, 255, 255, 255, gFontNormal);
+            }
+        }
+
         const int SQ_SIZE = 50; 
         for (int i = 0; i < gClientCount; i++) {
             int currentHP = gPlayerHP[i]; 
@@ -835,6 +858,23 @@ void HandleWeaponSelection(int x, int y) {
 /* WindowEvent: 入力処理  */
 void WindowEvent(int num){
     ProcessJoyconInput();
+    /* --- バトル制限時間の進行と強制遷移 --- */
+    if (gCurrentScreenState == SCREEN_STATE_RESULT && gBattleTimerActive) {
+        Uint32 now = SDL_GetTicks();
+
+        /* 60秒経過で強制的に結果発表画面へ */
+        if (now - gBattleStartTime >= BATTLE_TIME_LIMIT_MS) {
+            gBattleTimerActive = 0;
+            SetScreenState(SCREEN_STATE_TITLE);
+            return;
+        }
+
+        /* タイマー表示を更新するため、一定間隔で再描画 */
+        if (now - gLastTimerRedraw >= 200) {
+            gLastTimerRedraw = now;
+            DrawImageAndText();
+        }
+    }
     SDL_Event event;
     if (SDL_PollEvent(&event)) {
         if (gCurrentScreenState == SCREEN_STATE_RESULT && gCountdownValue > 0) {
@@ -982,10 +1022,12 @@ void SetScreenState(int state)
     {
         gWeaponSent = 0;
         gSelectedWeaponID = -1;
+        gBattleTimerActive = 0;
     } 
     else if (state == SCREEN_STATE_LOBBY_WAIT) 
     {
         memset(gXPressedFlags, 0, sizeof(gXPressedFlags));
+        gBattleTimerActive = 0;
     }
     else if (state == SCREEN_STATE_RESULT) 
     {
@@ -997,10 +1039,16 @@ void SetScreenState(int state)
         gCountdownValue = 3;
         gCountdownStartTime = SDL_GetTicks();
         gLastFireTime = SDL_GetTicks(); 
+
+        /* バトル開始時刻を記録（ここから60秒で強制遷移） */
+        gBattleStartTime = SDL_GetTicks();
+        gBattleTimerActive = 1;
+        gLastTimerRedraw = 0;
     } 
     else if (state == SCREEN_STATE_TITLE) 
     {
         memset(gXPressedFlags, 0, sizeof(gXPressedFlags));
+        gBattleTimerActive = 0;
     }
     DrawImageAndText(); 
 }

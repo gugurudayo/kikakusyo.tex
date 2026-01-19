@@ -36,12 +36,8 @@ int main(int argc,char *argv[])
         exit(-1);
     }
     
-    /* 割り込み処理のセット */
-    //SDL_AddTimer(5000,SignalHandler,NULL);
-    
     /* メインイベントループ */
     while(endFlag){
-        // SDLイベントを処理し、SDL_QUITを受け取ったら終了する
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {

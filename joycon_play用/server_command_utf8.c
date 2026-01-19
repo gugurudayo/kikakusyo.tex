@@ -61,6 +61,12 @@ static int gEffectRemaining[MAX_CLIENTS] = {0};
 static int gEffectAmount[MAX_CLIENTS] = {0};
 static Uint32 gEffectNextTick[MAX_CLIENTS] = {0};
 
+/* --- バトル制限時間（60秒） --- */
+#define BATTLE_TIME_LIMIT_MS 60000
+static int gPendingBattleStart = 0; /* NEXT_SCREEN_COMMAND が「武器選択→バトル開始」の遷移かどうか */
+static Uint32 BattleTimeout(Uint32 interval, void *param);
+
+
 int gPlayerPosX[MAX_CLIENTS] = {0}; 
 int gPlayerPosY[MAX_CLIENTS] = {0};
 static int GetMaxBulletByWeapon(int weaponID);
@@ -162,6 +168,13 @@ static Uint32 SendCommandAfterDelay(Uint32 interval, void *param)
     SetCharData2DataBlock(data, p->cmd, &ds);
     SendData(ALL_CLIENTS, data, ds);
 
+    /* 武器選択完了→バトル開始の遷移なら、このタイミングで60秒タイマーを開始 */
+    if (p->cmd == NEXT_SCREEN_COMMAND && gPendingBattleStart) {
+        gPendingBattleStart = 0;
+        SDL_AddTimer(BATTLE_TIME_LIMIT_MS, BattleTimeout, NULL);
+        printf("[SERVER] Battle timer started: 60s\n");
+    }
+
     if (p->cmd == END_COMMAND) 
     {
         SDL_Event event;
@@ -171,6 +184,26 @@ static Uint32 SendCommandAfterDelay(Uint32 interval, void *param)
     }
     free(param);
     return 0; 
+}
+
+/* バトル開始から60秒経過したら強制的に結果発表へ遷移させる */
+static Uint32 BattleTimeout(Uint32 interval, void *param)
+{
+    (void)interval;
+    (void)param;
+
+    if (gBattleEndSent) {
+        return 0;
+    }
+
+    gBattleEndSent = 1;
+    printf("[SERVER] Battle Timeout (60s). Force transition to result screen.\n");
+
+    unsigned char data[MAX_DATA];
+    int ds = 0;
+    SetCharData2DataBlock(data, NEXT_SCREEN_COMMAND, &ds);
+    SendData(ALL_CLIENTS, data, ds);
+    return 0;
 }
 
 /* 生存判定 */
@@ -458,6 +491,8 @@ int ExecuteCommand(char command, int pos)
             gHandsCount++;
             if (gHandsCount == GetClientNum()) 
             {
+                /* 次の NEXT_SCREEN_COMMAND は「武器選択→バトル開始」なのでタイマー開始対象 */
+                gPendingBattleStart = 1;
                 TimerParam *tp = malloc(sizeof(TimerParam));
                 if (tp != NULL) 
                 {

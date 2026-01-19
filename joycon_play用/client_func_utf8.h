@@ -1,3 +1,4 @@
+/* client_func_utf8.h */
 #ifndef _CLIENT_FUNC_H_
 #define _CLIENT_FUNC_H_
 #include"common_utf8.h"

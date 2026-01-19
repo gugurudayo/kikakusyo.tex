@@ -297,7 +297,7 @@ static int IsHitWall(SDL_Rect *rect)
     SDL_GetWindowSize(gMainWindow, &w, &h);
 
     int blockCount = 8;
-    int blockSize = 150;
+    int blockSize = 120;
     int cols = 4;
     int rows = 2;
     int cell_w = w / cols;
@@ -472,7 +472,7 @@ void DrawImageAndText(void){
 
         {
             int blockCount = 8;
-            int blockSize = 120;
+            int blockSize = 150;
             int cols = 4;
             int rows = 2;
             int cell_w = w / cols;

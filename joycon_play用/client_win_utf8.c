@@ -18,7 +18,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 #define BACKGROUND_IMAGE "22823124.jpg" 
-#define RESULT_IMAGE "Chatgpt.png"     
+#define RESULT_IMAGE "Field.png"     
 #define RESULT_BACK_IMAGE "2535410.jpg" 
 #define YELLOW_WEAPON_ICON_IMAGE "1192635.png" 
 #define BLUE_WEAPON_ICON_IMAGE "862582.png"  

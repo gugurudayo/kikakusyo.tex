@@ -871,7 +871,12 @@ void HandleWeaponSelection(int x, int y) {
 }
 /* WindowEvent: 入力処理  */
 void WindowEvent(int num){
-    ProcessJoyconInput();
+    if(gCurrentScreenState == SCREEN_STATE_RESULT &&gPlayerHP[gMyClientID] <= 0)
+    {
+	    return;
+    }
+      ProcessJoyconInput();
+
     /* --- バトル制限時間の進行と強制遷移 --- */
     if (gCurrentScreenState == SCREEN_STATE_RESULT && gBattleTimerActive) {
         Uint32 now = SDL_GetTicks();

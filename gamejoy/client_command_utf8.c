@@ -78,6 +78,9 @@ int ExecuteCommand(char command) {
             char d;
             RecvIntData(&sid);
             RecvCharData(&d);
+	    if(sid == gMyID && gPlayerHP[gMyID]<=0) {
+		    break;
+	    }
             UpdatePlayerPos(sid, d);
             DrawImageAndText();
             break;
@@ -90,6 +93,9 @@ int ExecuteCommand(char command) {
     RecvIntData(&x);
     RecvIntData(&y);
     RecvCharData(&d);
+    if(sid == gMyID && gPlayerHP[gMyID]<=0) {
+                    break;
+            }
     
     int found = 0;
     // すでに画面内にある同じ主(sid)の弾を探して座標を更新する

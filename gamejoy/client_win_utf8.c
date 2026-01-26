@@ -1136,7 +1136,7 @@ void UpdatePlayerPos(int clientID, char direction)
         int rows = 2;
         int cell_w = windowW / cols;
         int cell_h = windowH / rows;
-        SDL_Rect nextRect = { newX, newY, SQ_SIZE, SQ_SIZE };
+       SDL_Rect nextRect = { newX, newY, SQ_SIZE, SQ_SIZE };
         for (int i = 0; i < blockCount; i++) {
             SDL_Rect blockRect;
             blockRect.x = (i % cols) * cell_w + (cell_w / 2) - (blockSize / 2);
@@ -1151,7 +1151,9 @@ void UpdatePlayerPos(int clientID, char direction)
         }
     }
 
-    SDL_Rect myNextRect = { newX, newY, SQ_SIZE, SQ_SIZE };
+    //バグが起こるのでプレイヤー同士の当たり判定を削除してる
+
+   /* SDL_Rect myNextRect = { newX, newY, SQ_SIZE, SQ_SIZE };
     for (int i = 0; i < gClientCount; i++) 
     {
         if (i == clientID || gPlayerHP[i] <= 0) 
@@ -1161,6 +1163,7 @@ void UpdatePlayerPos(int clientID, char direction)
         if (SDL_HasIntersection(&myNextRect, &otherRect)) 
         return; 
     }
+    */
 
     gPlayerPosX[clientID] = newX;
     gPlayerPosY[clientID] = newY;

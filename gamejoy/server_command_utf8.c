@@ -172,7 +172,7 @@ static Uint32 SendCommandAfterDelay(Uint32 interval, void *param)
     if (p->cmd == NEXT_SCREEN_COMMAND && gPendingBattleStart) {
         gPendingBattleStart = 0;
         SDL_AddTimer(BATTLE_TIME_LIMIT_MS, BattleTimeout, NULL);
-        printf("[SERVER] Battle timer started: 60s\n");
+        //printf("[SERVER] Battle timer started: 60s\n");
     }
 
     if (p->cmd == END_COMMAND) 
@@ -389,8 +389,6 @@ static Uint32 ServerGameLoop(Uint32 interval, void *param) {
             if (!gServerProjectiles[i].active) break;
         }
 
-        // ★ 重要：kループの「外」で、このフレームの最終位置を1回だけ送信する ★
-        // これにより、パケットの送信頻度が安定し、全画面で速度が一致します
         unsigned char data[MAX_DATA];
         int ds = 0;
         SetCharData2DataBlock(data, UPDATE_PROJECTILE_COMMAND, &ds);
@@ -601,8 +599,6 @@ int ExecuteCommand(char command, int pos)
                     gServerProjectiles[i].firedByClientID = id;
                     gServerProjectiles[i].active = 1;
                     gServerProjectiles[i].direction = d;
-                    
-                    // ★ 重要：飛距離計算用のカウントをリセット
                     gServerProjectiles[i].distance = 0; 
                     break;
                 }

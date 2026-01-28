@@ -21,7 +21,7 @@ int gTrapType = 0;
 
 void SetMyClientID(int id) {
     gMyID = id;
-    printf("[DEBUG] My Client ID is set to: %d\n", gMyID);
+    //printf("[DEBUG] My Client ID is set to: %d\n", gMyID);
 }
 
 void SetIntData2DataBlock(void *data, int intData, int *dataSize) {
@@ -78,9 +78,9 @@ int ExecuteCommand(char command) {
             char d;
             RecvIntData(&sid);
             RecvCharData(&d);
-	    if(sid == gMyID && gPlayerHP[gMyID]<=0) {
+            if(sid == gMyID && gPlayerHP[gMyID]<=0) {
 		    break;
-	    }
+	        }
             UpdatePlayerPos(sid, d);
             DrawImageAndText();
             break;
@@ -94,8 +94,8 @@ int ExecuteCommand(char command) {
     RecvIntData(&y);
     RecvCharData(&d);
     if(sid == gMyID && gPlayerHP[gMyID]<=0) {
-                    break;
-            }
+        break;
+    }
     
     int found = 0;
     // すでに画面内にある同じ主(sid)の弾を探して座標を更新する
@@ -150,10 +150,7 @@ int ExecuteCommand(char command) {
                 RecvIntData(&gTrapX);
                 RecvIntData(&gTrapY);
                 RecvIntData(&gTrapType); 
-                printf("[CLIENT] Trap SPAWNED at (%d, %d)\n", gTrapX, gTrapY);
-            } else {
-                printf("[CLIENT] Trap DESPAWNED\n");
-            }
+            } 
             DrawImageAndText();
             break;
         }

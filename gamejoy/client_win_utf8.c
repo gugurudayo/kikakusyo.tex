@@ -478,17 +478,14 @@ void DrawImageAndText(void){
 
         char modeMsg[64];
         if (gControlMode == MODE_MOVE) 
-            sprintf(modeMsg, "MODE: 移動 (Cキーで発射モードへ)");
+            sprintf(modeMsg, "モード: 移動 (Cキーで発射モードへ)");
         else 
-            sprintf(modeMsg, "MODE: 発射 (Cキーで移動モードへ)");
+            sprintf(modeMsg, "モード: 発射 (Cキーで移動モードへ)");
 
         DrawText_Internal(modeMsg, 10, 10, 255, 255, 0, gFontNormal);
 
-        /* --- 制限時間タイマー表示（画面上部中央） --- */
         if (gBattleTimerActive) {
     Uint32 now = SDL_GetTicks();
-
-    // ★ 3秒待ってからカウント開始
     Uint32 countStartTime = gBattleStartTime + 3000;
 
     int remainSec;
@@ -546,7 +543,7 @@ void DrawImageAndText(void){
                 DrawText_Internal(hpText, gPlayerPosX[i], gPlayerPosY[i] - 20, textR, textG, textB, gFontNormal);
 
                 /* クールタイム数値の表示 (自機のみ) */
-                if (i == gMyClientID) {
+                if (i == gMyClientID && gCountdownValue <= 0) {
                     Uint32 currentTime = SDL_GetTicks();
                     int weaponID = (gSelectedWeaponID < 0) ? 0 : gSelectedWeaponID;
                     int totalCT = gWeaponStats[weaponID][STAT_CT_TIME];

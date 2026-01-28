@@ -16,7 +16,7 @@ extern CLIENT gClients[MAX_CLIENTS];
 extern int SetUpServer(int num);
 extern void Ending(void);
 extern int RecvIntData(int pos,int *intData);
-extern int RecvCharData(int pos,char *charData); // ★ 追加: RecvCharDataの宣言
+extern int RecvCharData(int pos,char *charData); 
 extern void SendData(int pos,void *data,int dataSize);
 extern int SendRecvManager(void);
 extern int GetClientNum(void);
